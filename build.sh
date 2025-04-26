@@ -1,33 +1,27 @@
-#!/bin/bash
+# Step 1: Update package list
+sudo apt-get update
 
-# Ensure that we use the correct version of Python
-echo "Setting up environment..."
+# Step 2: Install Google Chrome
+sudo apt-get install -y google-chrome-stable
 
-# Update and install necessary system packages
-apt-get update
-apt-get install -y python3-pip python3-dev libpq-dev curl wget
+# Step 3: Install Chrome dependencies (if needed)
+sudo apt-get install -y libx11-dev libx11-xcb-dev libxcb1-dev libxcomposite-dev libxrandr-dev libglu1-mesa libgtk-3-0
 
-# Install Python dependencies
-echo "Installing dependencies..."
-pip install -r requirements.txt
+# Step 4: Install FFmpeg
+sudo apt-get install -y ffmpeg
 
-# Install Chrome browser and necessary dependencies
-echo "Installing Chrome..."
-curl -sSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o google-chrome-stable_current_amd64.deb
-dpkg -i google-chrome-stable_current_amd64.deb
-apt-get -f install
+# Step 5: Install Python dependencies (within your virtual environment)
+pip install --upgrade pip  # Ensure pip is up to date
+pip install webdriver-manager  # For managing ChromeDriver
+pip install ffmpeg  # If you're using Python bindings for ffmpeg
 
-# Install necessary libraries for Chrome and Selenium
-echo "Installing Chrome dependencies..."
-apt-get install -y libxss1 libappindicator3-1 libasound2 libnss3 libgconf-2-4
+# Optional: Install other necessary Python packages, if needed
+pip install requests python-dotenv packaging
 
-# Install webdriver-manager for Selenium
-pip install webdriver-manager
+# Step 6: Start the Streamlit app (assuming your Streamlit code is set up properly)
+streamlit run your_streamlit_app.py  # Replace with your Streamlit app script
 
-# If you need to install ffmpeg for video processing
-echo "Installing ffmpeg..."
-apt-get install -y ffmpeg
-
-# Set up the app and run it
-echo "App setup complete. Starting Streamlit..."
-streamlit run mxplayer_new.py --server.port $PORT
+# Check Streamlit app URL
+# Local: http://localhost:10000
+# Network: http://10.204.93.8:10000
+# External: http://44.233.151.27:10000
