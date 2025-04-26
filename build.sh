@@ -23,4 +23,4 @@ sudo apt-get install -y google-chrome-stable
 sudo apt-get install -y ffmpeg
 
 # Start Streamlit app
-streamlit run your_app.py  # Replace with your actual app script
+streamlit run mxplayer_new.py  # Replace with your actual app script
