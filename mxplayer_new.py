@@ -285,4 +285,4 @@ if st.button("Download Video"):
                     pass
 
 # Footer
-st.markdown("<div class='footer'>Made with ❤️ by AI Assistant</div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>Made with ❤️ by Sketch😘</div>", unsafe_allow_html=True)
