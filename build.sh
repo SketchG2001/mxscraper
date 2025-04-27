@@ -9,7 +9,7 @@ source ./.venv/bin/activate
 # Install dependencies from requirements.txt
 pip install -r requirements.txt
 
-# Install necessary system dependencies for Chrome (without sudo)
+# Install necessary dependencies (Chrome, ffmpeg)
 apt-get update
 apt-get install -y \
   libx11-dev \
@@ -23,15 +23,15 @@ apt-get install -y \
   libnss3 \
   libxcomposite-dev \
   libxdamage-dev \
-  wget
+  wget \
+  ffmpeg
 
-# Install Chrome browser
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-dpkg -i google-chrome-stable_current_amd64.deb
-apt-get install -f
+# Install Google Chrome in user-space (without root privileges)
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.tar.gz
+tar -xvzf google-chrome-stable_current_amd64.tar.gz -C $HOME/google-chrome
 
-# Install ffmpeg (needed for video processing)
-apt-get install -y ffmpeg
+# Set environment variable for Chrome binary path
+export PATH=$HOME/google-chrome/google-chrome-stable:$PATH
 
-# Start Streamlit app (make sure to use the Render port environment variable)
+# Start Streamlit app
 streamlit run mxplayer_new.py --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false --browser.gatherUsageStats=false --server.port=$PORT
