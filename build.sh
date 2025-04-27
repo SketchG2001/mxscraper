@@ -32,12 +32,22 @@ tar -xvzf google-chrome-stable_current_amd64.tar.gz -C $HOME/google-chrome
 echo "Setting up Chrome environment variable..."
 export PATH=$HOME/google-chrome/google-chrome-stable:$PATH
 
-# Verify FFmpeg and Chrome installations
+# Ensure Google Chrome is in the path
+echo "Verifying Google Chrome installation..."
+if [ -f "$HOME/google-chrome/google-chrome-stable" ]; then
+    echo "Google Chrome is installed."
+else
+    echo "Google Chrome installation failed!"
+    exit 1
+fi
+
+# Verify FFmpeg installation
 echo "Verifying FFmpeg installation..."
 ffmpeg -version
 
+# Verify Chrome installation
 echo "Verifying Chrome installation..."
-google-chrome-stable --version
+$HOME/google-chrome/google-chrome-stable --version
 
 # Start Streamlit app
 echo "Starting Streamlit app..."
