@@ -31,9 +31,9 @@ wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 echo "Installing Google Chrome..."
 dpkg -i google-chrome-stable_current_amd64.deb
 
-# Fix missing dependencies (if any)
+# Fix missing dependencies (without sudo)
 echo "Fixing missing dependencies..."
-apt-get install -f
+apt-get install -f --assume-yes
 
 # Set environment variable for Chrome binary path
 echo "Setting up Chrome environment variable..."
@@ -41,7 +41,7 @@ export PATH=$HOME/google-chrome/opt/google/chrome:$PATH
 
 # Ensure Google Chrome is in the path
 echo "Verifying Google Chrome installation..."
-if [ -f "/usr/bin/google-chrome-stable" ]; then
+if [ -f "$HOME/google-chrome/opt/google/chrome/google-chrome" ]; then
     echo "Google Chrome is installed."
 else
     echo "Google Chrome installation failed!"
