@@ -3,6 +3,10 @@
 # Enable exit on error
 set -e
 
+# This script has been modified to handle read-only filesystems (like on Render)
+# All file operations that might fail due to read-only filesystems have been
+# updated with error handling to ensure the script continues execution.
+
 # Function to show progress
 show_progress() {
     echo "===> $1"
@@ -12,17 +16,20 @@ show_progress() {
 CACHE_DIR="${RENDER_CACHE_DIR:-$PWD/.cache}"
 show_progress "Using cache directory: $CACHE_DIR"
 
-mkdir -p "$CACHE_DIR/pip"
-mkdir -p "$CACHE_DIR/chrome"
-mkdir -p "$CACHE_DIR/chromedriver"
-mkdir -p "$CACHE_DIR/apt"
+# Use error handling for potential read-only parent directories
+mkdir -p "$CACHE_DIR/pip" 2>/dev/null || true
+mkdir -p "$CACHE_DIR/chrome" 2>/dev/null || true
+mkdir -p "$CACHE_DIR/chromedriver" 2>/dev/null || true
+mkdir -p "$CACHE_DIR/apt" 2>/dev/null || true
 
 # Speed up apt operations
 if [ -f /etc/apt/apt.conf.d/docker-clean ]; then
     # Remove docker-clean to keep apt cache
     show_progress "Configuring apt for caching"
-    rm -f /etc/apt/apt.conf.d/docker-clean
-    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+    # Use || true to prevent failure on read-only filesystem
+    rm -f /etc/apt/apt.conf.d/docker-clean 2>/dev/null || true
+    # Try to create keep-cache file, but don't fail if filesystem is read-only
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache 2>/dev/null || true
 fi
 
 # Install FFmpeg and other dependencies in parallel
@@ -54,7 +61,7 @@ show_progress "Installing Python dependencies"
 PIP_PID=$!
 
 # Create bin directory if it doesn't exist
-mkdir -p ./bin
+mkdir -p ./bin 2>/dev/null || true
 
 # Wait for FFmpeg installation if it was started
 if [ -n "$FFMPEG_PID" ]; then
@@ -64,7 +71,7 @@ fi
 
 # Create symbolic link to FFmpeg in bin directory
 if command -v ffmpeg &> /dev/null; then
-    ln -sf $(which ffmpeg) ./bin/ffmpeg
+    ln -sf $(which ffmpeg) ./bin/ffmpeg 2>/dev/null || true
 fi
 
 # Download and setup Chrome and ChromeDriver in parallel
@@ -84,7 +91,7 @@ setup_chrome() {
     # Download Chrome if not in cache
     if [ ! -f "$chrome_cache" ]; then
         show_progress "Downloading Chrome"
-        mkdir -p "$CACHE_DIR/chrome"
+        mkdir -p "$CACHE_DIR/chrome" 2>/dev/null || true
         curl -SL --connect-timeout 30 --retry 5 --retry-delay 2 \
             https://storage.googleapis.com/chrome-for-testing-public/125.0.6422.78/linux64/chrome-linux64.zip \
             -o "$chrome_cache" || return 1
@@ -92,12 +99,12 @@ setup_chrome() {
         show_progress "Using cached Chrome"
     fi
 
-    # Extract Chrome
-    cp "$chrome_cache" ./$chrome_zip
+    # Extract Chrome - use error handling for potential read-only filesystem
+    cp "$chrome_cache" ./$chrome_zip 2>/dev/null || { show_progress "Warning: Could not copy Chrome to current directory"; return 1; }
     unzip -q ./$chrome_zip || return 1
-    mv ./chrome-linux64 ./chrome-linux
-    chmod +x ./chrome-linux/chrome
-    rm ./$chrome_zip
+    mv ./chrome-linux64 ./chrome-linux 2>/dev/null || { show_progress "Warning: Could not rename Chrome directory"; return 1; }
+    chmod +x ./chrome-linux/chrome 2>/dev/null || true
+    rm ./$chrome_zip 2>/dev/null || true
     show_progress "Chrome setup completed"
     return 0
 }
@@ -116,7 +123,7 @@ setup_chromedriver() {
     # Download ChromeDriver if not in cache
     if [ ! -f "$driver_cache" ]; then
         show_progress "Downloading ChromeDriver"
-        mkdir -p "$CACHE_DIR/chromedriver"
+        mkdir -p "$CACHE_DIR/chromedriver" 2>/dev/null || true
         curl -SL --connect-timeout 30 --retry 5 --retry-delay 2 \
             https://storage.googleapis.com/chrome-for-testing-public/125.0.6422.78/linux64/chromedriver-linux64.zip \
             -o "$driver_cache" || return 1
@@ -124,14 +131,14 @@ setup_chromedriver() {
         show_progress "Using cached ChromeDriver"
     fi
 
-    # Extract ChromeDriver
-    cp "$driver_cache" ./$driver_zip
+    # Extract ChromeDriver - use error handling for potential read-only filesystem
+    cp "$driver_cache" ./$driver_zip 2>/dev/null || { show_progress "Warning: Could not copy ChromeDriver to current directory"; return 1; }
     unzip -q ./$driver_zip || return 1
-    mkdir -p ./chromedriver
-    mv ./chromedriver-linux64/chromedriver ./chromedriver/chromedriver
-    chmod +x ./chromedriver/chromedriver
-    rm -rf ./chromedriver-linux64
-    rm ./$driver_zip
+    mkdir -p ./chromedriver 2>/dev/null || { show_progress "Warning: Could not create ChromeDriver directory"; return 1; }
+    mv ./chromedriver-linux64/chromedriver ./chromedriver/chromedriver 2>/dev/null || { show_progress "Warning: Could not move ChromeDriver executable"; return 1; }
+    chmod +x ./chromedriver/chromedriver 2>/dev/null || true
+    rm -rf ./chromedriver-linux64 2>/dev/null || true
+    rm ./$driver_zip 2>/dev/null || true
     show_progress "ChromeDriver setup completed"
     return 0
 }
@@ -165,19 +172,21 @@ export CHROMEDRIVER_PATH="./chromedriver/chromedriver"
 export FFMPEG_PATH="./bin/ffmpeg"
 
 # Create .env file for Streamlit to read
-echo "CHROME_PATH=./chrome-linux/chrome" > .env
-echo "CHROMEDRIVER_PATH=./chromedriver/chromedriver" >> .env
-echo "FFMPEG_PATH=./bin/ffmpeg" >> .env
+# Use error handling for potential read-only current directory
+echo "CHROME_PATH=./chrome-linux/chrome" > .env 2>/dev/null || true
+echo "CHROMEDRIVER_PATH=./chromedriver/chromedriver" >> .env 2>/dev/null || true
+echo "FFMPEG_PATH=./bin/ffmpeg" >> .env 2>/dev/null || true
 
 # Cleanup to reduce image size
 show_progress "Cleaning up to reduce image size"
 if [ -z "$RENDER_CACHE_DIR" ]; then
     # Only clean local cache if not using Render's persistent storage
-    rm -rf ./.cache/pip/http
-    rm -rf ./.cache/pip/selfcheck
+    # Use error handling for potential read-only cache directory
+    rm -rf ./.cache/pip/http 2>/dev/null || true
+    rm -rf ./.cache/pip/selfcheck 2>/dev/null || true
 fi
 
-# Remove unnecessary files
+# Remove unnecessary files - already have error handling
 apt-get clean -y 2>/dev/null || true
 rm -rf /var/lib/apt/lists/* 2>/dev/null || true
 rm -rf /tmp/* 2>/dev/null || true
@@ -187,19 +196,20 @@ rm -rf /var/tmp/* 2>/dev/null || true
 if [ -n "$RENDER" ]; then
     show_progress "Applying Render-specific optimizations"
     # Reduce logging verbosity for Streamlit
-    mkdir -p ~/.streamlit
-    echo "[logger]" > ~/.streamlit/config.toml
-    echo "level = \"error\"" >> ~/.streamlit/config.toml
+    # Use error handling for potential read-only home directory
+    mkdir -p ~/.streamlit 2>/dev/null || true
+    echo "[logger]" > ~/.streamlit/config.toml 2>/dev/null || true
+    echo "level = \"error\"" >> ~/.streamlit/config.toml 2>/dev/null || true
 
     # Set low-resource mode for Streamlit
-    echo "[server]" >> ~/.streamlit/config.toml
-    echo "headless = true" >> ~/.streamlit/config.toml
-    echo "enableCORS = false" >> ~/.streamlit/config.toml
-    echo "enableXsrfProtection = false" >> ~/.streamlit/config.toml
+    echo "[server]" >> ~/.streamlit/config.toml 2>/dev/null || true
+    echo "headless = true" >> ~/.streamlit/config.toml 2>/dev/null || true
+    echo "enableCORS = false" >> ~/.streamlit/config.toml 2>/dev/null || true
+    echo "enableXsrfProtection = false" >> ~/.streamlit/config.toml 2>/dev/null || true
 
     # Set memory management
-    echo "[runner]" >> ~/.streamlit/config.toml
-    echo "memory_threshold = 400" >> ~/.streamlit/config.toml
+    echo "[runner]" >> ~/.streamlit/config.toml 2>/dev/null || true
+    echo "memory_threshold = 400" >> ~/.streamlit/config.toml 2>/dev/null || true
 fi
 
 show_progress "Setup complete! Starting Streamlit app..."
