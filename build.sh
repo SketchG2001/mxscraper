@@ -14,15 +14,9 @@ pip install -r requirements.txt
 
 # Install necessary dependencies (Chrome, ffmpeg) in user space
 
-# Download and install FFmpeg
-echo "Downloading and installing FFmpeg..."
-wget https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-i686-static.tar.xz
-mkdir -p $HOME/ffmpeg
-tar -xf ffmpeg-release-i686-static.tar.xz -C $HOME/ffmpeg
-
-# Set environment variable for ffmpeg binary path
-echo "Setting up FFmpeg environment variable..."
-export PATH=$HOME/ffmpeg/ffmpeg-*/bin:$PATH
+# Use the included FFmpeg from the repository
+echo "Using FFmpeg from repository..."
+export PATH=$PWD/bin:$PATH
 
 # Install Headless Chromium (No root required)
 echo "Downloading and installing Headless Chromium..."
