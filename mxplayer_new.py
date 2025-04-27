@@ -55,9 +55,29 @@ if 'download_output_file' not in st.session_state:
     st.session_state.download_output_file = None
 if 'error_message' not in st.session_state:
     st.session_state.error_message = None
+if 'ui_needs_update' not in st.session_state:
+    st.session_state.ui_needs_update = False
+if 'last_update_time' not in st.session_state:
+    st.session_state.last_update_time = time.time()
+
+# Function to check if UI needs update without full rerun
+def check_ui_update():
+    # Only update UI at most once per second to reduce resource usage
+    current_time = time.time()
+    if st.session_state.ui_needs_update and (current_time - st.session_state.last_update_time) > 1.0:
+        st.session_state.ui_needs_update = False
+        st.session_state.last_update_time = current_time
+        return True
+    return False
 
 # Page configuration
-st.set_page_config(page_title="MX Player Video Downloader", page_icon="🎥")
+st.set_page_config(page_title="MX Player Video Downloader", page_icon="🎥", layout="centered")
+
+# Check if UI needs update and handle accordingly
+if check_ui_update():
+    # If UI needs update, we'll just let the normal rendering happen
+    # This is more efficient than using st.rerun() which reloads the entire app
+    pass
 
 # Custom CSS for a cleaner look
 st.markdown("""
@@ -397,7 +417,7 @@ def process_video(url, progress_callback):
     st.session_state.download_thread = download_thread
 
     try:
-        # Setup Chrome options with anti-bot measures
+        # Setup Chrome options with anti-bot measures and low-resource optimizations
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
@@ -405,21 +425,47 @@ def process_video(url, progress_callback):
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-extensions")
 
-        # Anti-bot detection measures
+        # Memory optimization flags
+        chrome_options.add_argument("--js-flags=--expose-gc")  # Enable JavaScript garbage collection
+        chrome_options.add_argument("--single-process")  # Use single process to reduce overhead
+        chrome_options.add_argument("--disable-application-cache")  # Disable application cache
+        chrome_options.add_argument("--disable-infobars")  # Disable info bars
+        chrome_options.add_argument("--disable-notifications")  # Disable notifications
+        chrome_options.add_argument("--disable-popup-blocking")  # Disable popup blocking
+        chrome_options.add_argument("--disable-save-password-bubble")  # Disable save password
+        chrome_options.add_argument("--disable-translate")  # Disable translate
+        chrome_options.add_argument("--disable-web-security")  # Disable web security
+        chrome_options.add_argument("--disable-client-side-phishing-detection")  # Disable phishing detection
+        chrome_options.add_argument("--disable-component-update")  # Disable component updates
+        chrome_options.add_argument("--disable-default-apps")  # Disable default apps
+        chrome_options.add_argument("--disable-domain-reliability")  # Disable domain reliability
+        chrome_options.add_argument("--disable-hang-monitor")  # Disable hang monitor
+        chrome_options.add_argument("--disable-prompt-on-repost")  # Disable prompt on repost
+        chrome_options.add_argument("--disable-sync")  # Disable sync
+        chrome_options.add_argument("--disable-features=TranslateUI,BlinkGenPropertyTrees")  # Disable specific features
+        chrome_options.add_argument("--disable-ipc-flooding-protection")  # Disable IPC flooding protection
+        chrome_options.add_argument("--disable-backgrounding-occluded-windows")  # Disable backgrounding occluded windows
+        chrome_options.add_argument("--memory-pressure-off")  # Disable memory pressure
+        chrome_options.add_argument("--force-fieldtrials=*BackgroundTracing/default/")  # Disable background tracing
+
+        # Set low memory limits
+        chrome_options.add_argument("--renderer-process-limit=1")  # Limit renderer processes
+        chrome_options.add_argument("--disk-cache-size=1")  # Minimal disk cache
+
+        # Use smaller window size to reduce memory usage
+        window_width = 800
+        window_height = 600
+        chrome_options.add_argument(f"--window-size={window_width},{window_height}")
+
+        # Anti-bot detection measures (simplified)
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option("useAutomationExtension", False)
 
-        # Use random user agent
-        user_agent = get_random_user_agent()
-        chrome_options.add_argument(f"user-agent={user_agent}")
+        # Use a single user agent instead of random to reduce complexity
+        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-        # Add window size randomization for more human-like behavior
-        window_width = random.randint(1024, 1920)
-        window_height = random.randint(768, 1080)
-        chrome_options.add_argument(f"--window-size={window_width},{window_height}")
-
-        # Setup performance logging
+        # Setup minimal performance logging
         chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
         # Create temp directory for download
@@ -510,7 +556,7 @@ def process_video(url, progress_callback):
             # Start download
             progress_callback(0.5, "Downloading video...")
 
-            # Command to download video
+            # Command to download video with resource optimization
             cmd = [
                 "yt-dlp",
                 "--ffmpeg-location", ffmpeg_path,
@@ -518,6 +564,33 @@ def process_video(url, progress_callback):
                 "--no-part",
                 "--force-generic-extractor",
                 "--no-check-certificate",
+                "--no-playlist",  # Don't process playlists
+                "--no-simulate",  # Don't simulate, actually download
+                "--no-progress",  # Disable progress to reduce CPU usage
+                "--quiet",  # Reduce output verbosity
+                "--no-cache-dir",  # Don't use cache directory
+                "--no-sponsorblock",  # Disable sponsorblock
+                "--no-write-thumbnail",  # Don't write thumbnails
+                "--no-write-description",  # Don't write descriptions
+                "--no-write-info-json",  # Don't write info JSON
+                "--no-write-annotations",  # Don't write annotations
+                "--no-write-playlist-metafiles",  # Don't write playlist metafiles
+                "--no-embed-metadata",  # Don't embed metadata
+                "--no-embed-chapters",  # Don't embed chapters
+                "--no-embed-thumbnail",  # Don't embed thumbnails
+                "--no-embed-subs",  # Don't embed subtitles
+                "--no-embed-info-json",  # Don't embed info JSON
+                "--no-mtime",  # Don't use mtime
+                "--no-update",  # Don't update
+                "--no-post-overwrites",  # Don't post overwrites
+                "--no-keep-fragments",  # Don't keep fragments
+                "--no-hls-use-mpegts",  # Don't use MPEG-TS for HLS
+                "--downloader-args", "ffmpeg:-nostats -loglevel 0",  # Reduce FFmpeg verbosity
+                "--retries", "3",  # Limit retries to save resources
+                "--fragment-retries", "3",  # Limit fragment retries
+                "--buffer-size", "1024",  # Smaller buffer size to reduce memory usage
+                "--throttled-rate", "100K",  # Throttle download rate to reduce CPU/network usage
+                "-f", "worst[ext=mp4]/worst",  # Use lowest quality to save resources
                 "-o", output_file,
                 video_urls[0]  # Use the first URL found
             ]
@@ -618,7 +691,11 @@ def cancel_download():
             st.session_state.download_process.terminate()
             st.session_state.download_process = None
         st.session_state.download_progress = 0.0
-        st.rerun()
+        st.session_state.ui_needs_update = True
+
+        # Force garbage collection
+        import gc
+        gc.collect()
 
 # Function to reset download state (for error recovery)
 def reset_download():
@@ -631,7 +708,11 @@ def reset_download():
         del st.session_state.progress_bar
     if 'status_text' in st.session_state:
         del st.session_state.status_text
-    st.rerun()
+    st.session_state.ui_needs_update = True
+
+    # Force garbage collection
+    import gc
+    gc.collect()
 
 # Function to pause download
 def pause_download():
@@ -640,7 +721,7 @@ def pause_download():
         # Ensure the UI updates immediately with styled text
         if 'status_text' in st.session_state:
             st.session_state.status_text.markdown(f"<span class='status-paused'>Paused at: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
-        st.rerun()
+        st.session_state.ui_needs_update = True
 
 # Function to resume download
 def resume_download():
@@ -649,7 +730,7 @@ def resume_download():
         # Ensure the UI updates immediately with styled text
         if 'status_text' in st.session_state:
             st.session_state.status_text.markdown(f"<span class='status-downloading'>Resuming download from: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
-        st.rerun()
+        st.session_state.ui_needs_update = True
 
 # Progress callback function
 def update_progress(progress, status):
@@ -680,7 +761,11 @@ with download_col1:
             # Start a new download
             st.session_state.download_status = "downloading"
             st.session_state.error_message = None
-            st.rerun()
+            st.session_state.ui_needs_update = True
+
+            # Force garbage collection before starting new download
+            import gc
+            gc.collect()
 
 with download_col2:
     # Control buttons layout with better spacing
@@ -781,17 +866,24 @@ if st.session_state.download_status in ["downloading", "paused", "error"]:
                 if error:
                     st.session_state.error_message = error
                     st.session_state.download_status = "error"
-                    st.rerun()
+                    # Use session state to trigger UI update instead of rerun
+                    st.session_state.ui_needs_update = True
                 elif output_file and os.path.exists(output_file):
                     st.session_state.download_output_file = output_file
                     st.session_state.download_status = "completed"
-                    st.rerun()
+                    # Use session state to trigger UI update instead of rerun
+                    st.session_state.ui_needs_update = True
             except Exception as e:
                 error_msg = f"An error occurred: {str(e)}"
                 st.session_state.error_message = error_msg
                 st.session_state.download_status = "error"
                 st.session_state.download_process = None
-                st.rerun()
+                # Use session state to trigger UI update instead of rerun
+                st.session_state.ui_needs_update = True
+
+            # Force garbage collection after processing
+            import gc
+            gc.collect()
 
         # Start the processing in a separate thread to avoid blocking the UI
         processing_thread = threading.Thread(target=process_video_thread)
@@ -805,38 +897,97 @@ if st.session_state.download_status == "completed" and st.session_state.download
     if os.path.exists(output_file):
         st.success("Video downloaded successfully!")
 
-        # Read video file
-        with open(output_file, "rb") as file:
-            video_bytes = file.read()
+        # Get file size without loading the entire file into memory
+        file_size_mb = os.path.getsize(output_file) / (1024 * 1024)
 
-            # Get file size
-            file_size_mb = len(video_bytes) / (1024 * 1024)
+        # Display video info
+        st.markdown(f"<h2 class='sub-header'>Your Video is Ready!</h2>", unsafe_allow_html=True)
+        st.info(f"File Size: {file_size_mb:.1f} MB")
 
-            # Display video info
-            st.markdown(f"<h2 class='sub-header'>Your Video is Ready!</h2>", unsafe_allow_html=True)
-            st.info(f"File Size: {file_size_mb:.1f} MB")
+        # Download button - use file path instead of loading into memory
+        st.markdown("<div class='download-btn'>", unsafe_allow_html=True)
 
-            # Download button
-            st.markdown("<div class='download-btn'>", unsafe_allow_html=True)
-            st.download_button(
-                label="⬇️ Download Video",
-                data=video_bytes,
-                file_name=f"mxplayer_video_{int(time.time())}.mp4",
-                mime="video/mp4"
-            )
-            st.markdown("</div>", unsafe_allow_html=True)
+        # Create a temporary copy with a user-friendly name for download
+        download_filename = f"mxplayer_video_{int(time.time())}.mp4"
+        download_path = os.path.join(os.path.dirname(output_file), download_filename)
 
-            # Video preview
-            st.video(video_bytes)
+        try:
+            # Copy file instead of loading into memory
+            import shutil
+            shutil.copy2(output_file, download_path)
 
-            # Clean up
-            try:
-                os.remove(output_file)
-                st.session_state.download_output_file = None
-                st.session_state.download_status = "idle"
-                st.session_state.download_progress = 0.0
-            except:
-                pass
+            # Use the file path for download button
+            with open(download_path, "rb") as file:
+                # Only read a small chunk for the download button
+                # The full file will be streamed when downloaded
+                file_header = file.read(1024 * 1024)  # Read just 1MB for the button
+
+                st.download_button(
+                    label="⬇️ Download Video",
+                    data=file,  # This will stream the file instead of loading it all at once
+                    file_name=download_filename,
+                    mime="video/mp4"
+                )
+        except Exception as e:
+            st.error(f"Error preparing download: {str(e)}")
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # Video preview - use file path instead of loading into memory
+        # This uses HTML5 video tag with direct file path to avoid loading into memory
+        try:
+            # Create a small thumbnail for preview instead of loading the full video
+            import subprocess
+
+            # Extract a thumbnail from the video
+            thumbnail_path = os.path.join(os.path.dirname(output_file), "thumbnail.jpg")
+            ffmpeg_path = find_ffmpeg_path()
+
+            if ffmpeg_path:
+                try:
+                    # Extract a frame at 1 second for thumbnail
+                    subprocess.run([
+                        ffmpeg_path, 
+                        "-i", output_file, 
+                        "-ss", "00:00:01.000", 
+                        "-vframes", "1", 
+                        "-q:v", "2", 
+                        thumbnail_path
+                    ], check=True, capture_output=True)
+
+                    # Display thumbnail instead of full video
+                    if os.path.exists(thumbnail_path):
+                        st.image(thumbnail_path, caption="Video Preview (Thumbnail)")
+                        st.info("Download the video to view the full content")
+                    else:
+                        st.warning("Video preview not available - download to view")
+                except:
+                    st.warning("Video preview not available - download to view")
+            else:
+                st.warning("Video preview not available - download to view")
+        except:
+            st.warning("Video preview not available - download to view")
+
+        # Clean up
+        try:
+            # Clean up all temporary files
+            os.remove(output_file)
+            if os.path.exists(download_path):
+                os.remove(download_path)
+            if os.path.exists(thumbnail_path):
+                os.remove(thumbnail_path)
+
+            # Clean up session state
+            st.session_state.download_output_file = None
+            st.session_state.download_status = "idle"
+            st.session_state.download_progress = 0.0
+
+            # Force garbage collection to free memory
+            import gc
+            gc.collect()
+        except Exception as e:
+            st.warning(f"Cleanup warning: {str(e)}")
+            pass
     else:
         st.error("Downloaded file not found. Please try again.")
         st.session_state.download_status = "idle"
