@@ -268,7 +268,7 @@ if [ -n "$RENDER" ]; then
 
     # Add caching optimizations
     echo "[global]" >> ~/.streamlit/config.toml 2>/dev/null || true
-    echo "disableWatchdogWarning = true" >> ~/.streamlit/config.toml 2>/dev/null || true  # Disable watchdog warning
+    # disableWatchdogWarning option has been removed in newer Streamlit versions
     echo "showWarningOnDirectExecution = false" >> ~/.streamlit/config.toml 2>/dev/null || true  # Disable direct execution warning
 
     # Add runner optimizations
@@ -310,7 +310,6 @@ timeout 300 streamlit run mxplayer_new.py \
     --server.enableWebsocketCompression=true \
     --browser.gatherUsageStats=false \
     --browser.serverAddress="localhost" \
-    --global.disableWatchdogWarning=true \
     --global.showWarningOnDirectExecution=false \
     --runner.fastReruns=true \
     --logger.level=error \
