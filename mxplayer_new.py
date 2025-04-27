@@ -6,11 +6,19 @@ import subprocess
 import streamlit as st
 import tempfile
 import platform
+import logging
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger('mxplayer_downloader')
 
 # Page configuration
 st.set_page_config(page_title="MX Player Video Downloader", page_icon="🎥")
@@ -97,6 +105,7 @@ def find_ffmpeg_path():
 # Function to extract and download video
 def process_video(url, progress_callback):
     try:
+        logger.info(f"Starting video processing for URL: {url}")
         # Setup Chrome options
         chrome_options = Options()
         chrome_options.add_argument("--headless")
@@ -109,13 +118,24 @@ def process_video(url, progress_callback):
         chrome_options.add_argument("--disable-gl-drawing-for-tests")
         chrome_options.add_argument("--disable-webgl")
         chrome_options.add_argument("--disable-extensions")
+
+        # Enhanced anti-bot detection settings
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--start-maximized")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option("useAutomationExtension", False)
+
+        # More realistic user agent
         chrome_options.add_argument(
-            f"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            f"user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
         )
 
+        # Add common headers that browsers typically send
+        chrome_options.add_argument("--accept-lang=en-US,en;q=0.9")
+
         # Setup performance logging
-        chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+        chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL", "browser": "ALL"})
 
         # Create temp directory for download
         temp_dir = tempfile.mkdtemp()
@@ -137,10 +157,13 @@ def process_video(url, progress_callback):
 
             if os.path.exists(chrome_binary_path) and os.path.exists(chromedriver_path):
                 # Running on Render, use pre-installed binaries
+                logger.info(f"Using pre-installed Chrome binary at: {chrome_binary_path}")
+                logger.info(f"Using pre-installed Chromedriver at: {chromedriver_path}")
                 chrome_options.binary_location = chrome_binary_path
                 service = Service(executable_path=chromedriver_path)
             else:
                 # Local development, use ChromeDriverManager
+                logger.info("Chrome binary not found, using ChromeDriverManager")
                 service = Service(ChromeDriverManager().install())
 
             driver = webdriver.Chrome(service=service, options=chrome_options)
@@ -150,40 +173,225 @@ def process_video(url, progress_callback):
         try:
             # Navigate to MX Player URL
             progress_callback(0.2, "Navigating to MX Player...")
+            logger.info(f"Navigating to URL: {url}")
             driver.get(url)
-            time.sleep(5)  # Wait for page to load
+
+            # Increase wait time for Render environment
+            progress_callback(0.25, "Waiting for page to load (this may take longer on Render)...")
+            logger.info("Waiting 15 seconds for page to load")
+            time.sleep(15)  # Increased from 5 to 15 seconds
+
+            # Execute JavaScript to scroll down and trigger more content loading
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+            time.sleep(2)
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
 
             # Extract video URLs from performance logs
             progress_callback(0.3, "Extracting video information...")
-            logs = driver.get_log("performance")
+
+            # Try multiple methods to extract video URLs
             video_urls = []
 
-            for log in logs:
+            # Method 1: Performance logs
+            try:
+                logger.info("Extracting video URLs from performance logs")
+                logs = driver.get_log("performance")
+                logger.info(f"Retrieved {len(logs)} performance log entries")
+
+                for log in logs:
+                    try:
+                        message = json.loads(log["message"])
+                        if "Network.responseReceived" in message["message"]["method"]:
+                            request_id = message["message"]["params"]["requestId"]
+                            request = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})
+                            body = request.get("body", "")
+                            if ".m3u8" in body or ".mpd" in body:
+                                m3u8_urls = re.findall(r'https://[^\s\'"]+\.m3u8', body)
+                                mpd_urls = re.findall(r'https://[^\s\'"]+\.mpd', body)
+                                if m3u8_urls or mpd_urls:
+                                    logger.info(f"Found video URLs in response: {len(m3u8_urls)} m3u8, {len(mpd_urls)} mpd")
+                                video_urls.extend(m3u8_urls)
+                                video_urls.extend(mpd_urls)
+                    except Exception as e:
+                        error_msg = f"Log processing error (non-critical): {str(e)}"
+                        logger.warning(error_msg)
+                        progress_callback(0.3, error_msg)
+                        continue
+            except Exception as e:
+                error_msg = f"Performance log extraction failed: {str(e)}"
+                logger.error(error_msg)
+                progress_callback(0.3, error_msg)
+
+            # Method 2: Direct page source analysis
+            if not video_urls:
+                progress_callback(0.35, "Trying alternative extraction method...")
+                logger.info("Trying direct page source analysis for video URLs")
+                page_source = driver.page_source
+                page_size = len(page_source)
+                logger.info(f"Retrieved page source (size: {page_size} bytes)")
+
+                m3u8_urls = re.findall(r'https://[^\s\'"]+\.m3u8', page_source)
+                mpd_urls = re.findall(r'https://[^\s\'"]+\.mpd', page_source)
+
+                if m3u8_urls or mpd_urls:
+                    logger.info(f"Found video URLs in page source: {len(m3u8_urls)} m3u8, {len(mpd_urls)} mpd")
+                else:
+                    logger.warning("No video URLs found in page source")
+
+                video_urls.extend(m3u8_urls)
+                video_urls.extend(mpd_urls)
+
+            # Method 3: Execute JavaScript to find video elements
+            if not video_urls:
+                progress_callback(0.36, "Trying JavaScript extraction method...")
+                logger.info("Trying JavaScript extraction for video elements")
                 try:
-                    message = json.loads(log["message"])
-                    if "Network.responseReceived" in message["message"]["method"]:
-                        request_id = message["message"]["params"]["requestId"]
-                        request = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})
-                        body = request.get("body", "")
-                        if ".m3u8" in body or ".mpd" in body:
-                            video_urls.extend(re.findall(r'https://[^\s\'"]+\.m3u8', body))
-                            video_urls.extend(re.findall(r'https://[^\s\'"]+\.mpd', body))
-                except Exception:
-                    continue
+                    # Try to extract from video elements
+                    video_elements = driver.execute_script("""
+                        var videos = [];
+                        var videoElements = document.querySelectorAll('video');
+                        for(var i = 0; i < videoElements.length; i++) {
+                            if(videoElements[i].src) videos.push(videoElements[i].src);
+                        }
+                        return videos;
+                    """)
+
+                    logger.info(f"Found {len(video_elements)} video elements via JavaScript")
+                    filtered_urls = [url for url in video_elements if url.endswith('.m3u8') or url.endswith('.mpd')]
+                    if filtered_urls:
+                        logger.info(f"Found {len(filtered_urls)} valid video URLs from video elements")
+                    video_urls.extend(filtered_urls)
+                except Exception as e:
+                    error_msg = f"JavaScript extraction failed: {str(e)}"
+                    logger.error(error_msg)
+                    progress_callback(0.36, error_msg)
+
+            # Log the number of URLs found for debugging
+            progress_callback(0.37, f"Found {len(video_urls)} potential video URLs")
+
+            # If no URLs found, try refreshing the page and extracting again (up to 3 attempts)
+            attempts = 1
+            max_attempts = 3
+
+            while not video_urls and attempts < max_attempts:
+                attempts += 1
+                progress_callback(0.38, f"No URLs found. Retrying (attempt {attempts}/{max_attempts})...")
+                logger.info(f"No URLs found. Starting retry attempt {attempts}/{max_attempts}")
+
+                # Refresh the page
+                logger.info("Refreshing the page")
+                driver.refresh()
+                time.sleep(10)  # Wait after refresh
+
+                # Scroll again
+                logger.info("Scrolling page to trigger content loading")
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+                time.sleep(2)
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(2)
+
+                # Try extraction methods again
+                try:
+                    # Method 1: Performance logs
+                    logger.info("Retry: Extracting from performance logs")
+                    logs = driver.get_log("performance")
+                    logger.info(f"Retry: Retrieved {len(logs)} performance log entries")
+
+                    for log in logs:
+                        try:
+                            message = json.loads(log["message"])
+                            if "Network.responseReceived" in message["message"]["method"]:
+                                request_id = message["message"]["params"]["requestId"]
+                                request = driver.execute_cdp_cmd("Network.getResponseBody", {"requestId": request_id})
+                                body = request.get("body", "")
+                                if ".m3u8" in body or ".mpd" in body:
+                                    m3u8_urls = re.findall(r'https://[^\s\'"]+\.m3u8', body)
+                                    mpd_urls = re.findall(r'https://[^\s\'"]+\.mpd', body)
+                                    if m3u8_urls or mpd_urls:
+                                        logger.info(f"Retry: Found URLs in response: {len(m3u8_urls)} m3u8, {len(mpd_urls)} mpd")
+                                    video_urls.extend(m3u8_urls)
+                                    video_urls.extend(mpd_urls)
+                        except Exception as e:
+                            logger.warning(f"Retry: Log processing error: {str(e)}")
+                            continue
+                except Exception as e:
+                    error_msg = f"Retry performance log extraction failed: {str(e)}"
+                    logger.error(error_msg)
+                    progress_callback(0.38, error_msg)
+
+                # Method 2: Direct page source
+                if not video_urls:
+                    logger.info("Retry: Trying direct page source analysis")
+                    page_source = driver.page_source
+                    page_size = len(page_source)
+                    logger.info(f"Retry: Retrieved page source (size: {page_size} bytes)")
+
+                    m3u8_urls = re.findall(r'https://[^\s\'"]+\.m3u8', page_source)
+                    mpd_urls = re.findall(r'https://[^\s\'"]+\.mpd', page_source)
+
+                    if m3u8_urls or mpd_urls:
+                        logger.info(f"Retry: Found URLs in page source: {len(m3u8_urls)} m3u8, {len(mpd_urls)} mpd")
+                    video_urls.extend(m3u8_urls)
+                    video_urls.extend(mpd_urls)
+
+                logger.info(f"Retry attempt {attempts} complete: Found {len(video_urls)} potential video URLs")
+                progress_callback(0.39, f"Retry attempt {attempts}: Found {len(video_urls)} potential video URLs")
+
+            # Final fallback: Try using yt-dlp's built-in extraction capabilities
+            if not video_urls:
+                progress_callback(0.4, "Trying direct yt-dlp extraction as last resort...")
+                logger.info("Starting direct yt-dlp extraction as final fallback")
+                try:
+                    # Use yt-dlp to extract the URL directly
+                    cmd = [
+                        "yt-dlp",
+                        "--no-warnings",
+                        "--no-check-certificate",
+                        "--get-url",
+                        url
+                    ]
+
+                    logger.info(f"Running yt-dlp command: {' '.join(cmd)}")
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+
+                    if result.returncode == 0:
+                        logger.info("yt-dlp command executed successfully")
+                        if result.stdout.strip():
+                            extracted_urls = result.stdout.strip().split('\n')
+                            logger.info(f"yt-dlp extracted {len(extracted_urls)} raw URLs")
+
+                            for extracted_url in extracted_urls:
+                                if extracted_url.endswith('.m3u8') or extracted_url.endswith('.mpd'):
+                                    logger.info(f"Found valid streaming URL: {extracted_url[:50]}...")
+                                    video_urls.append(extracted_url)
+                        else:
+                            logger.warning("yt-dlp returned empty output")
+                    else:
+                        logger.error(f"yt-dlp command failed with return code {result.returncode}")
+                        if result.stderr:
+                            logger.error(f"yt-dlp error output: {result.stderr}")
+
+                    progress_callback(0.41, f"Direct yt-dlp extraction found {len(video_urls)} URLs")
+                except Exception as e:
+                    error_msg = f"Direct yt-dlp extraction failed: {str(e)}"
+                    logger.error(error_msg)
+                    progress_callback(0.41, error_msg)
 
             if not video_urls:
-                return None, "No video URLs found. Please check the URL and try again."
+                return None, "No video URLs found after multiple attempts. Please check the URL and try again."
 
             # Download video using yt-dlp
-            progress_callback(0.4, "Preparing to download...")
+            progress_callback(0.45, "Preparing to download...")
 
             # yt-dlp is already installed via requirements.txt
-            progress_callback(0.45, "Preparing yt-dlp...")
+            progress_callback(0.48, "Preparing yt-dlp...")
 
             # Start download
             progress_callback(0.5, "Downloading video...")
 
             # Command to download video
+            logger.info(f"Starting video download using URL: {video_urls[0][:50]}...")
             cmd = [
                 "yt-dlp",
                 "--ffmpeg-location", ffmpeg_path,
@@ -194,6 +402,7 @@ def process_video(url, progress_callback):
                 "-o", output_file,
                 video_urls[0]  # Use the first URL found
             ]
+            logger.info(f"Download command: {' '.join(cmd)}")
 
             # Execute download process
             process = subprocess.Popen(
