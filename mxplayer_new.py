@@ -54,7 +54,7 @@ with st.expander("How to use"):
     2. Click the "Download" button
     3. Wait for the video to be processed
     4. Download the video to your device
-    
+
     ### Requirements
     - Internet connection
     - Chrome browser (installed automatically)
@@ -131,7 +131,18 @@ def process_video(url, progress_callback):
 
         # Initialize Chrome driver
         try:
-            service = Service(ChromeDriverManager().install())
+            # Check if running on Render (look for Chrome binary installed by build.sh)
+            chrome_binary_path = "./chrome/chrome-linux64/chrome"
+            chromedriver_path = "./chromedriver/chromedriver"
+
+            if os.path.exists(chrome_binary_path) and os.path.exists(chromedriver_path):
+                # Running on Render, use pre-installed binaries
+                chrome_options.binary_location = chrome_binary_path
+                service = Service(executable_path=chromedriver_path)
+            else:
+                # Local development, use ChromeDriverManager
+                service = Service(ChromeDriverManager().install())
+
             driver = webdriver.Chrome(service=service, options=chrome_options)
         except WebDriverException as e:
             return None, f"Failed to start Chrome: {str(e)}"
@@ -166,12 +177,8 @@ def process_video(url, progress_callback):
             # Download video using yt-dlp
             progress_callback(0.4, "Preparing to download...")
 
-            # Check if yt-dlp is installed
-            try:
-                subprocess.run(["yt-dlp", "--version"], check=True, capture_output=True)
-            except FileNotFoundError:
-                progress_callback(0.45, "Installing yt-dlp...")
-                subprocess.run(["pip", "install", "-U", "yt-dlp"], check=True)
+            # yt-dlp is already installed via requirements.txt
+            progress_callback(0.45, "Preparing yt-dlp...")
 
             # Start download
             progress_callback(0.5, "Downloading video...")
