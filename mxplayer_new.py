@@ -24,11 +24,13 @@ load_dotenv()
 if 'download_process' not in st.session_state:
     st.session_state.download_process = None
 if 'download_status' not in st.session_state:
-    st.session_state.download_status = "idle"  # idle, downloading, paused, cancelled, completed
+    st.session_state.download_status = "idle"  # idle, downloading, paused, cancelled, completed, error
 if 'download_progress' not in st.session_state:
     st.session_state.download_progress = 0.0
 if 'download_output_file' not in st.session_state:
     st.session_state.download_output_file = None
+if 'error_message' not in st.session_state:
+    st.session_state.error_message = None
 
 # Page configuration
 st.set_page_config(page_title="MX Player Video Downloader", page_icon="🎥")
@@ -57,6 +59,71 @@ st.markdown("""
         text-align: center;
         margin-top: 3rem;
         color: #888888;
+    }
+    /* Button styling for better visibility */
+    .stButton button {
+        font-weight: bold;
+        transition: all 0.3s ease;
+        border-radius: 8px;
+        padding: 0.5rem 1rem;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Specific button styles */
+    .stButton.pause-btn button {
+        background-color: #FFA500;
+        color: white;
+    }
+
+    .stButton.pause-btn button:hover {
+        background-color: #FF8C00;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .stButton.resume-btn button {
+        background-color: #4CAF50;
+        color: white;
+    }
+
+    .stButton.resume-btn button:hover {
+        background-color: #45a049;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        transform: translateY(-2px);
+    }
+
+    .stButton.cancel-btn button {
+        background-color: #f44336;
+        color: white;
+    }
+
+    .stButton.cancel-btn button:hover {
+        background-color: #d32f2f;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        transform: translateY(-2px);
+    }
+
+    /* Disabled button styles */
+    .stButton button:disabled {
+        background-color: #cccccc !important;
+        color: #666666 !important;
+        box-shadow: none !important;
+        cursor: not-allowed !important;
+        transform: none !important;
+    }
+
+    /* Status indicators */
+    .status-downloading {
+        color: #4CAF50;
+        font-weight: bold;
+    }
+    .status-paused {
+        color: #FFA500;
+        font-weight: bold;
+    }
+    .status-error {
+        color: #FF0000;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -327,18 +394,27 @@ def process_video(url, progress_callback):
                     return None, "Download cancelled by user."
 
                 # Check if download was paused
-                while st.session_state.download_status == "paused":
-                    time.sleep(0.5)
-                    # If resumed, continue
+                if st.session_state.download_status == "paused":
+                    # Log the pause with appropriate styling
+                    progress_callback(st.session_state.download_progress, f"Paused at: {st.session_state.download_progress*100:.1f}%")
+
+                    # Wait while paused
+                    while st.session_state.download_status == "paused":
+                        time.sleep(0.1)  # Shorter sleep time for more responsive resume
+
+                        # If cancelled while paused
+                        if st.session_state.download_status == "cancelled":
+                            if process.poll() is None:  # If process is still running
+                                process.terminate()
+                                process.wait()
+                            return None, "Download cancelled by user."
+
+                    # If we got here, we've resumed
                     if st.session_state.download_status == "downloading":
-                        progress_callback(st.session_state.download_progress, "Download resumed...")
-                        break
-                    # If cancelled while paused
-                    if st.session_state.download_status == "cancelled":
-                        if process.poll() is None:  # If process is still running
-                            process.terminate()
-                            process.wait()
-                        return None, "Download cancelled by user."
+                        # Update progress with resume message and appropriate styling
+                        progress_callback(st.session_state.download_progress, f"Resuming download from: {st.session_state.download_progress*100:.1f}%")
+                        # Short delay to ensure UI updates before continuing
+                        time.sleep(0.2)
 
                 if '[download]' in line:
                     match = re.search(r'(\d+\.\d+)%', line)
@@ -393,84 +469,171 @@ def cancel_download():
         st.session_state.download_progress = 0.0
         st.rerun()
 
+# Function to reset download state (for error recovery)
+def reset_download():
+    st.session_state.download_status = "idle"
+    st.session_state.download_progress = 0.0
+    st.session_state.download_process = None
+    if 'download_output_file' in st.session_state:
+        st.session_state.download_output_file = None
+    if 'progress_bar' in st.session_state:
+        del st.session_state.progress_bar
+    if 'status_text' in st.session_state:
+        del st.session_state.status_text
+    st.rerun()
+
 # Function to pause download
 def pause_download():
     if st.session_state.download_status == "downloading":
         st.session_state.download_status = "paused"
+        # Ensure the UI updates immediately with styled text
+        if 'status_text' in st.session_state:
+            st.session_state.status_text.markdown(f"<span class='status-paused'>Paused at: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
         st.rerun()
 
 # Function to resume download
 def resume_download():
     if st.session_state.download_status == "paused":
         st.session_state.download_status = "downloading"
+        # Ensure the UI updates immediately with styled text
+        if 'status_text' in st.session_state:
+            st.session_state.status_text.markdown(f"<span class='status-downloading'>Resuming download from: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
         st.rerun()
 
 # Progress callback function
 def update_progress(progress, status):
     if 'progress_bar' in st.session_state and 'status_text' in st.session_state:
         st.session_state.progress_bar.progress(progress)
-        st.session_state.status_text.text(status)
+
+        # Apply appropriate styling based on status content
+        if "Paused" in status:
+            st.session_state.status_text.markdown(f"<span class='status-paused'>{status}</span>", unsafe_allow_html=True)
+        elif "Error" in status or "failed" in status:
+            st.session_state.status_text.markdown(f"<span class='status-error'>{status}</span>", unsafe_allow_html=True)
+        elif "Download" in status or "Downloading" in status:
+            st.session_state.status_text.markdown(f"<span class='status-downloading'>{status}</span>", unsafe_allow_html=True)
+        else:
+            st.session_state.status_text.text(status)
 
 # Main download section
 download_col1, download_col2 = st.columns([3, 1])
 
 with download_col1:
-    # Main download button
-    if st.button("Download Video", key="download_btn", disabled=st.session_state.download_status in ["downloading", "paused"]):
+    # Main download button - disabled during download, pause, or error states
+    download_disabled = st.session_state.download_status in ["downloading", "paused", "error"]
+    if st.button("Download Video", key="download_btn", disabled=download_disabled):
         if not mx_url or not re.match(r"https://www\.mxplayer\.in/.*", mx_url):
             st.error("Please enter a valid MX Player URL")
+            st.session_state.error_message = "Please enter a valid MX Player URL"
         else:
             # Start a new download
             st.session_state.download_status = "downloading"
+            st.session_state.error_message = None
             st.rerun()
 
 with download_col2:
-    # Control buttons layout
-    control_cols = st.columns(3)
+    # Control buttons layout with better spacing
+    st.markdown("<div style='padding: 10px 0;'></div>", unsafe_allow_html=True)
 
+    # Create a container for the buttons
+    control_container = st.container()
+
+    # Use columns for button layout
+    control_cols = control_container.columns(3)
+
+    # Pause button with enhanced styling
     with control_cols[0]:
-        if st.button("⏸️ Pause", key="pause_btn", disabled=st.session_state.download_status != "downloading"):
+        pause_disabled = st.session_state.download_status != "downloading"
+        if st.button("⏸️ Pause", 
+                    key="pause_btn", 
+                    disabled=pause_disabled,
+                    help="Pause the current download"):
             pause_download()
 
+    # Resume button with enhanced styling
     with control_cols[1]:
-        if st.button("▶️ Resume", key="resume_btn", disabled=st.session_state.download_status != "paused"):
+        resume_disabled = st.session_state.download_status != "paused"
+        if st.button("▶️ Resume", 
+                    key="resume_btn", 
+                    disabled=resume_disabled,
+                    help="Resume the paused download"):
             resume_download()
 
+    # Cancel button with enhanced styling
     with control_cols[2]:
-        if st.button("❌ Cancel", key="cancel_btn", disabled=st.session_state.download_status not in ["downloading", "paused"]):
+        cancel_disabled = st.session_state.download_status not in ["downloading", "paused"]
+        if st.button("❌ Cancel", 
+                    key="cancel_btn", 
+                    disabled=cancel_disabled,
+                    help="Cancel the current download"):
             cancel_download()
 
 # Display download status
-if st.session_state.download_status in ["downloading", "paused"]:
-    # Setup progress tracking if not already set
-    if 'progress_bar' not in st.session_state:
-        st.session_state.progress_bar = st.progress(st.session_state.download_progress)
-    if 'status_text' not in st.session_state:
-        st.session_state.status_text = st.empty()
-
-    # Update progress display
-    st.session_state.progress_bar.progress(st.session_state.download_progress)
-
-    # Show status message
+if st.session_state.download_status in ["downloading", "paused", "error"]:
+    # Add a status indicator
+    status_indicator = ""
     if st.session_state.download_status == "downloading":
-        st.session_state.status_text.text(f"Downloading: {st.session_state.download_progress*100:.1f}%")
+        status_indicator = "🟢 Active"
+        status_class = "status-downloading"
     elif st.session_state.download_status == "paused":
-        st.session_state.status_text.text(f"Paused at: {st.session_state.download_progress*100:.1f}%")
+        status_indicator = "🟠 Paused"
+        status_class = "status-paused"
+    elif st.session_state.download_status == "error":
+        status_indicator = "🔴 Error"
+        status_class = "status-error"
+
+    # Display status indicator
+    st.markdown(f"<div style='text-align: center; margin-bottom: 10px;'><span class='{status_class}'><strong>{status_indicator}</strong></span></div>", unsafe_allow_html=True)
+
+    # Display error message if in error state
+    if st.session_state.download_status == "error" and st.session_state.error_message:
+        st.markdown(f"<div style='text-align: center; margin-bottom: 15px;'><span class='status-error'>{st.session_state.error_message}</span></div>", unsafe_allow_html=True)
+
+        # Add a retry button in the center
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🔄 Retry Download", key="retry_main"):
+                reset_download()
+
+    # Only show progress for downloading and paused states
+    if st.session_state.download_status in ["downloading", "paused"]:
+        # Setup progress tracking if not already set
+        if 'progress_bar' not in st.session_state:
+            st.session_state.progress_bar = st.progress(st.session_state.download_progress)
+        if 'status_text' not in st.session_state:
+            st.session_state.status_text = st.empty()
+
+        # Update progress display
+        st.session_state.progress_bar.progress(st.session_state.download_progress)
+
+        # Show status message with styled text
+        if st.session_state.download_status == "downloading":
+            st.session_state.status_text.markdown(f"<span class='status-downloading'>Downloading: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
+        elif st.session_state.download_status == "paused":
+            st.session_state.status_text.markdown(f"<span class='status-paused'>Paused at: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
 
     # Process video if status is downloading and no process is running
     if st.session_state.download_status == "downloading" and not st.session_state.download_process:
         # Process video in a separate thread
         with st.spinner("Processing video..."):
-            output_file, error = process_video(mx_url, update_progress)
+            try:
+                output_file, error = process_video(mx_url, update_progress)
 
-            # Handle result
-            if error:
-                st.error(error)
-                st.session_state.download_status = "idle"
-                st.rerun()
-            elif output_file and os.path.exists(output_file):
-                st.session_state.download_output_file = output_file
-                st.session_state.download_status = "completed"
+                # Handle result
+                if error:
+                    st.error(error)
+                    st.session_state.download_status = "idle"
+                    st.rerun()
+                elif output_file and os.path.exists(output_file):
+                    st.session_state.download_output_file = output_file
+                    st.session_state.download_status = "completed"
+                    st.rerun()
+            except Exception as e:
+                error_msg = f"An error occurred: {str(e)}"
+                st.session_state.error_message = error_msg
+                st.session_state.download_status = "error"
+                st.session_state.download_process = None
+                st.error(error_msg)
                 st.rerun()
 
 # Display completed download
