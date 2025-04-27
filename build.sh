@@ -25,23 +25,19 @@ export PATH=$HOME/ffmpeg/ffmpeg-*/bin:$PATH
 
 # Install Google Chrome in user-space (without root privileges)
 echo "Downloading and installing Google Chrome..."
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.tar.gz
 
-# Install the .deb package using dpkg
-echo "Installing Google Chrome..."
-dpkg -i google-chrome-stable_current_amd64.deb
-
-# Fix missing dependencies (without sudo)
-echo "Fixing missing dependencies..."
-apt-get install -f --assume-yes
+# Extract the tarball to $HOME
+echo "Extracting Google Chrome..."
+tar -xvzf google-chrome-stable_current_amd64.tar.gz -C $HOME/google-chrome
 
 # Set environment variable for Chrome binary path
 echo "Setting up Chrome environment variable..."
-export PATH=$HOME/google-chrome/opt/google/chrome:$PATH
+export PATH=$HOME/google-chrome/google-chrome:$PATH
 
 # Ensure Google Chrome is in the path
 echo "Verifying Google Chrome installation..."
-if [ -f "$HOME/google-chrome/opt/google/chrome/google-chrome" ]; then
+if [ -f "$HOME/google-chrome/google-chrome" ]; then
     echo "Google Chrome is installed."
 else
     echo "Google Chrome installation failed!"
@@ -54,7 +50,7 @@ ffmpeg -version
 
 # Verify Chrome installation
 echo "Verifying Chrome installation..."
-google-chrome-stable --version
+google-chrome --version
 
 # Start Streamlit app
 echo "Starting Streamlit app..."
