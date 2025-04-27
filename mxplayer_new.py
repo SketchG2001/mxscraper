@@ -54,7 +54,7 @@ with st.expander("How to use"):
     2. Click the "Download" button
     3. Wait for the video to be processed
     4. Download the video to your device
-
+    
     ### Requirements
     - Internet connection
     - Chrome browser (installed automatically)
@@ -131,15 +131,7 @@ def process_video(url, progress_callback):
 
         # Initialize Chrome driver
         try:
-            # Check if running on Render (where we've pre-installed Chrome)
-            if os.path.exists('./chrome-linux') and os.path.exists('./chromedriver/chromedriver'):
-                # Use pre-installed Chrome binary and Chromedriver on Render
-                chrome_options.binary_location = './chrome-linux/chrome'
-                service = Service('./chromedriver/chromedriver')
-            else:
-                # For local development, use ChromeDriverManager
-                service = Service(ChromeDriverManager().install())
-
+            service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=chrome_options)
         except WebDriverException as e:
             return None, f"Failed to start Chrome: {str(e)}"
