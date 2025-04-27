@@ -17,32 +17,8 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
 
-# Load environment variables - with timeout to prevent hanging
-try:
-    # Set a short timeout for environment loading
-    import signal
-
-    def timeout_handler(signum, frame):
-        raise TimeoutError("Environment loading timed out")
-
-    # Set 5 second timeout for environment loading
-    signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(5)
-
-    # Load environment variables
-    load_dotenv()
-
-    # Cancel the alarm
-    signal.alarm(0)
-except (ImportError, AttributeError):
-    # If signal module is not available (e.g., on Windows), just load normally
-    load_dotenv()
-except TimeoutError:
-    # If loading times out, continue without it
-    st.warning("Environment loading timed out, continuing with defaults")
-except Exception as e:
-    # If any other error occurs, log it and continue
-    print(f"Error loading environment: {str(e)}")
+# Load environment variables
+load_dotenv()
 
 # Initialize session state for download control
 if 'download_process' not in st.session_state:
@@ -55,29 +31,9 @@ if 'download_output_file' not in st.session_state:
     st.session_state.download_output_file = None
 if 'error_message' not in st.session_state:
     st.session_state.error_message = None
-if 'ui_needs_update' not in st.session_state:
-    st.session_state.ui_needs_update = False
-if 'last_update_time' not in st.session_state:
-    st.session_state.last_update_time = time.time()
-
-# Function to check if UI needs update without full rerun
-def check_ui_update():
-    # Only update UI at most once per second to reduce resource usage
-    current_time = time.time()
-    if st.session_state.ui_needs_update and (current_time - st.session_state.last_update_time) > 1.0:
-        st.session_state.ui_needs_update = False
-        st.session_state.last_update_time = current_time
-        return True
-    return False
 
 # Page configuration
-st.set_page_config(page_title="MX Player Video Downloader", page_icon="🎥", layout="centered")
-
-# Check if UI needs update and handle accordingly
-if check_ui_update():
-    # If UI needs update, we'll just let the normal rendering happen
-    # This is more efficient than using st.rerun() which reloads the entire app
-    pass
+st.set_page_config(page_title="MX Player Video Downloader", page_icon="🎥")
 
 # Custom CSS for a cleaner look
 st.markdown("""
@@ -240,53 +196,35 @@ with st.expander("How to use"):
 mx_url = st.text_input("Enter MX Player video URL:", placeholder="https://www.mxplayer.in/...")
 
 
-# Function to find FFmpeg path with timeout
+# Function to find FFmpeg path
 def find_ffmpeg_path():
     # First check environment variable
     ffmpeg_env = os.getenv("FFMPEG_PATH")
     if ffmpeg_env and os.path.exists(ffmpeg_env):
         return ffmpeg_env
 
-    # Import timeout handling if available
-    try:
-        import signal
-        has_signal = True
-    except (ImportError, AttributeError):
-        has_signal = False
-
-    # Define timeout handler
-    if has_signal:
-        def timeout_handler(signum, frame):
-            raise TimeoutError("FFmpeg path search timed out")
-
-        # Set 5 second timeout for FFmpeg search
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(5)
-
     try:
         # Try to find ffmpeg in PATH
         if platform.system() == "Windows":
-            result = subprocess.run(["where", "ffmpeg"], capture_output=True, text=True, check=True, timeout=5)
+            result = subprocess.run(["where", "ffmpeg"], capture_output=True, text=True, check=True)
             return result.stdout.strip().split("\n")[0]
         else:  # Linux/Mac
-            result = subprocess.run(["which", "ffmpeg"], capture_output=True, text=True, check=True, timeout=5)
+            result = subprocess.run(["which", "ffmpeg"], capture_output=True, text=True, check=True)
             return result.stdout.strip()
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, TimeoutError):
+    except subprocess.CalledProcessError:
         # Check common installation paths
         common_paths = []
         if platform.system() == "Windows":
             common_paths = [
                 "ffmpeg.exe",
-                str(Path(__file__).parent / "ffmpeg.exe"),
-                "./bin/ffmpeg.exe"
+                str(Path(__file__).parent / "ffmpeg.exe")
             ]
         else:  # Linux/Mac
             common_paths = [
                 "/usr/bin/ffmpeg",
                 "/usr/local/bin/ffmpeg",
                 "/opt/homebrew/bin/ffmpeg",
-                "/app/bin/ffmpeg",  # Common path in containerized environments like Render
-                "./bin/ffmpeg"      # Path from build.sh
+                "/app/bin/ffmpeg"  # Common path in containerized environments like Render
             ]
 
         for path in common_paths:
@@ -294,10 +232,7 @@ def find_ffmpeg_path():
                 return path
 
         return None
-    finally:
-        # Ensure alarm is canceled even if an exception occurs
-        if has_signal:
-            signal.alarm(0)
+
 
 # Function to get Chrome and ChromeDriver paths for Render deployment
 def get_chrome_paths():
@@ -328,10 +263,12 @@ def get_chrome_paths():
 
     return chrome_path, chromedriver_path
 
+
 # Cache for Chrome driver to avoid repeated initialization
 chrome_driver_cache = None
 
-# Function to get Chrome driver with caching and timeout
+
+# Function to get Chrome driver with caching
 def get_chrome_driver(options):
     global chrome_driver_cache
 
@@ -342,55 +279,31 @@ def get_chrome_driver(options):
             chrome_driver_cache.current_url
             return chrome_driver_cache
         except:
-            # Driver is closed or crashed, create a new one
+            # Driver is closed or crashed, reset cache and create a new one
             chrome_driver_cache = None
 
-    # Import timeout handling if available
+    # Attempt to get Chrome and ChromeDriver paths
     try:
-        import signal
-        has_signal = True
-    except (ImportError, AttributeError):
-        has_signal = False
-
-    # Define timeout handler
-    if has_signal:
-        def timeout_handler(signum, frame):
-            raise TimeoutError("Chrome driver initialization timed out")
-
-        # Set 30 second timeout for driver initialization
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(30)
-
-    try:
-        # Get Chrome and ChromeDriver paths
         chrome_path, chromedriver_path = get_chrome_paths()
 
-        # Initialize Chrome driver
+        # If a valid chromedriver path is available, use it
         if chromedriver_path:
             service = Service(chromedriver_path)
             driver = webdriver.Chrome(service=service, options=options)
         else:
+            # If chromedriver_path is not provided, use webdriver-manager
             service = Service(ChromeDriverManager().install())
             driver = webdriver.Chrome(service=service, options=options)
 
-        # Cache the driver
+        # Cache the driver for reuse
         chrome_driver_cache = driver
-
-        # Cancel the alarm if it was set
-        if has_signal:
-            signal.alarm(0)
-
         return driver
-    except TimeoutError:
-        raise Exception("Chrome driver initialization timed out")
+
     except WebDriverException as e:
-        raise Exception(f"Failed to start Chrome: {str(e)}")
+        raise Exception(f"Failed to start ChromeDriver: {str(e)}")
     except Exception as e:
-        raise Exception(f"Failed to initialize Chrome: {str(e)}")
-    finally:
-        # Ensure alarm is canceled even if an exception occurs
-        if has_signal:
-            signal.alarm(0)
+        raise Exception(f"An unexpected error occurred while starting ChromeDriver: {str(e)}")
+
 
 # Function to get a random user agent
 def get_random_user_agent():
@@ -417,7 +330,7 @@ def process_video(url, progress_callback):
     st.session_state.download_thread = download_thread
 
     try:
-        # Setup Chrome options with anti-bot measures and low-resource optimizations
+        # Setup Chrome options with anti-bot measures
         chrome_options = Options()
         chrome_options.add_argument("--headless")
         chrome_options.add_argument("--no-sandbox")
@@ -425,47 +338,21 @@ def process_video(url, progress_callback):
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-extensions")
 
-        # Memory optimization flags
-        chrome_options.add_argument("--js-flags=--expose-gc")  # Enable JavaScript garbage collection
-        chrome_options.add_argument("--single-process")  # Use single process to reduce overhead
-        chrome_options.add_argument("--disable-application-cache")  # Disable application cache
-        chrome_options.add_argument("--disable-infobars")  # Disable info bars
-        chrome_options.add_argument("--disable-notifications")  # Disable notifications
-        chrome_options.add_argument("--disable-popup-blocking")  # Disable popup blocking
-        chrome_options.add_argument("--disable-save-password-bubble")  # Disable save password
-        chrome_options.add_argument("--disable-translate")  # Disable translate
-        chrome_options.add_argument("--disable-web-security")  # Disable web security
-        chrome_options.add_argument("--disable-client-side-phishing-detection")  # Disable phishing detection
-        chrome_options.add_argument("--disable-component-update")  # Disable component updates
-        chrome_options.add_argument("--disable-default-apps")  # Disable default apps
-        chrome_options.add_argument("--disable-domain-reliability")  # Disable domain reliability
-        chrome_options.add_argument("--disable-hang-monitor")  # Disable hang monitor
-        chrome_options.add_argument("--disable-prompt-on-repost")  # Disable prompt on repost
-        chrome_options.add_argument("--disable-sync")  # Disable sync
-        chrome_options.add_argument("--disable-features=TranslateUI,BlinkGenPropertyTrees")  # Disable specific features
-        chrome_options.add_argument("--disable-ipc-flooding-protection")  # Disable IPC flooding protection
-        chrome_options.add_argument("--disable-backgrounding-occluded-windows")  # Disable backgrounding occluded windows
-        chrome_options.add_argument("--memory-pressure-off")  # Disable memory pressure
-        chrome_options.add_argument("--force-fieldtrials=*BackgroundTracing/default/")  # Disable background tracing
-
-        # Set low memory limits
-        chrome_options.add_argument("--renderer-process-limit=1")  # Limit renderer processes
-        chrome_options.add_argument("--disk-cache-size=1")  # Minimal disk cache
-
-        # Use smaller window size to reduce memory usage
-        window_width = 800
-        window_height = 600
-        chrome_options.add_argument(f"--window-size={window_width},{window_height}")
-
-        # Anti-bot detection measures (simplified)
+        # Anti-bot detection measures
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option("useAutomationExtension", False)
 
-        # Use a single user agent instead of random to reduce complexity
-        chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        # Use random user agent
+        user_agent = get_random_user_agent()
+        chrome_options.add_argument(f"user-agent={user_agent}")
 
-        # Setup minimal performance logging
+        # Add window size randomization for more human-like behavior
+        window_width = random.randint(1024, 1920)
+        window_height = random.randint(768, 1080)
+        chrome_options.add_argument(f"--window-size={window_width},{window_height}")
+
+        # Setup performance logging
         chrome_options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
 
         # Create temp directory for download
@@ -556,7 +443,7 @@ def process_video(url, progress_callback):
             # Start download
             progress_callback(0.5, "Downloading video...")
 
-            # Command to download video with resource optimization
+            # Command to download video
             cmd = [
                 "yt-dlp",
                 "--ffmpeg-location", ffmpeg_path,
@@ -564,33 +451,6 @@ def process_video(url, progress_callback):
                 "--no-part",
                 "--force-generic-extractor",
                 "--no-check-certificate",
-                "--no-playlist",  # Don't process playlists
-                "--no-simulate",  # Don't simulate, actually download
-                "--no-progress",  # Disable progress to reduce CPU usage
-                "--quiet",  # Reduce output verbosity
-                "--no-cache-dir",  # Don't use cache directory
-                "--no-sponsorblock",  # Disable sponsorblock
-                "--no-write-thumbnail",  # Don't write thumbnails
-                "--no-write-description",  # Don't write descriptions
-                "--no-write-info-json",  # Don't write info JSON
-                "--no-write-annotations",  # Don't write annotations
-                "--no-write-playlist-metafiles",  # Don't write playlist metafiles
-                "--no-embed-metadata",  # Don't embed metadata
-                "--no-embed-chapters",  # Don't embed chapters
-                "--no-embed-thumbnail",  # Don't embed thumbnails
-                "--no-embed-subs",  # Don't embed subtitles
-                "--no-embed-info-json",  # Don't embed info JSON
-                "--no-mtime",  # Don't use mtime
-                "--no-update",  # Don't update
-                "--no-post-overwrites",  # Don't post overwrites
-                "--no-keep-fragments",  # Don't keep fragments
-                "--no-hls-use-mpegts",  # Don't use MPEG-TS for HLS
-                "--downloader-args", "ffmpeg:-nostats -loglevel 0",  # Reduce FFmpeg verbosity
-                "--retries", "3",  # Limit retries to save resources
-                "--fragment-retries", "3",  # Limit fragment retries
-                "--buffer-size", "1024",  # Smaller buffer size to reduce memory usage
-                "--throttled-rate", "100K",  # Throttle download rate to reduce CPU/network usage
-                "-f", "worst[ext=mp4]/worst",  # Use lowest quality to save resources
                 "-o", output_file,
                 video_urls[0]  # Use the first URL found
             ]
@@ -620,7 +480,8 @@ def process_video(url, progress_callback):
                 # Check if download was paused
                 if st.session_state.download_status == "paused":
                     # Log the pause with appropriate styling
-                    progress_callback(st.session_state.download_progress, f"Paused at: {st.session_state.download_progress*100:.1f}%")
+                    progress_callback(st.session_state.download_progress,
+                                      f"Paused at: {st.session_state.download_progress * 100:.1f}%")
 
                     # Wait while paused
                     while st.session_state.download_status == "paused":
@@ -636,7 +497,8 @@ def process_video(url, progress_callback):
                     # If we got here, we've resumed
                     if st.session_state.download_status == "downloading":
                         # Update progress with resume message and appropriate styling
-                        progress_callback(st.session_state.download_progress, f"Resuming download from: {st.session_state.download_progress*100:.1f}%")
+                        progress_callback(st.session_state.download_progress,
+                                          f"Resuming download from: {st.session_state.download_progress * 100:.1f}%")
                         # Short delay to ensure UI updates before continuing
                         time.sleep(0.2)
 
@@ -691,11 +553,8 @@ def cancel_download():
             st.session_state.download_process.terminate()
             st.session_state.download_process = None
         st.session_state.download_progress = 0.0
-        st.session_state.ui_needs_update = True
+        st.rerun()
 
-        # Force garbage collection
-        import gc
-        gc.collect()
 
 # Function to reset download state (for error recovery)
 def reset_download():
@@ -708,11 +567,8 @@ def reset_download():
         del st.session_state.progress_bar
     if 'status_text' in st.session_state:
         del st.session_state.status_text
-    st.session_state.ui_needs_update = True
+    st.rerun()
 
-    # Force garbage collection
-    import gc
-    gc.collect()
 
 # Function to pause download
 def pause_download():
@@ -720,8 +576,11 @@ def pause_download():
         st.session_state.download_status = "paused"
         # Ensure the UI updates immediately with styled text
         if 'status_text' in st.session_state:
-            st.session_state.status_text.markdown(f"<span class='status-paused'>Paused at: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
-        st.session_state.ui_needs_update = True
+            st.session_state.status_text.markdown(
+                f"<span class='status-paused'>Paused at: {st.session_state.download_progress * 100:.1f}%</span>",
+                unsafe_allow_html=True)
+        st.rerun()
+
 
 # Function to resume download
 def resume_download():
@@ -729,8 +588,11 @@ def resume_download():
         st.session_state.download_status = "downloading"
         # Ensure the UI updates immediately with styled text
         if 'status_text' in st.session_state:
-            st.session_state.status_text.markdown(f"<span class='status-downloading'>Resuming download from: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
-        st.session_state.ui_needs_update = True
+            st.session_state.status_text.markdown(
+                f"<span class='status-downloading'>Resuming download from: {st.session_state.download_progress * 100:.1f}%</span>",
+                unsafe_allow_html=True)
+        st.rerun()
+
 
 # Progress callback function
 def update_progress(progress, status):
@@ -739,13 +601,16 @@ def update_progress(progress, status):
 
         # Apply appropriate styling based on status content
         if "Paused" in status:
-            st.session_state.status_text.markdown(f"<span class='status-paused'>{status}</span>", unsafe_allow_html=True)
+            st.session_state.status_text.markdown(f"<span class='status-paused'>{status}</span>",
+                                                  unsafe_allow_html=True)
         elif "Error" in status or "failed" in status:
             st.session_state.status_text.markdown(f"<span class='status-error'>{status}</span>", unsafe_allow_html=True)
         elif "Download" in status or "Downloading" in status:
-            st.session_state.status_text.markdown(f"<span class='status-downloading'>{status}</span>", unsafe_allow_html=True)
+            st.session_state.status_text.markdown(f"<span class='status-downloading'>{status}</span>",
+                                                  unsafe_allow_html=True)
         else:
             st.session_state.status_text.text(status)
+
 
 # Main download section
 download_col1, download_col2 = st.columns([3, 1])
@@ -761,11 +626,7 @@ with download_col1:
             # Start a new download
             st.session_state.download_status = "downloading"
             st.session_state.error_message = None
-            st.session_state.ui_needs_update = True
-
-            # Force garbage collection before starting new download
-            import gc
-            gc.collect()
+            st.rerun()
 
 with download_col2:
     # Control buttons layout with better spacing
@@ -780,28 +641,28 @@ with download_col2:
     # Pause button with enhanced styling
     with control_cols[0]:
         pause_disabled = st.session_state.download_status != "downloading"
-        if st.button("⏸️ Pause", 
-                    key="pause_btn", 
-                    disabled=pause_disabled,
-                    help="Pause the current download"):
+        if st.button("⏸️ Pause",
+                     key="pause_btn",
+                     disabled=pause_disabled,
+                     help="Pause the current download"):
             pause_download()
 
     # Resume button with enhanced styling
     with control_cols[1]:
         resume_disabled = st.session_state.download_status != "paused"
-        if st.button("▶️ Resume", 
-                    key="resume_btn", 
-                    disabled=resume_disabled,
-                    help="Resume the paused download"):
+        if st.button("▶️ Resume",
+                     key="resume_btn",
+                     disabled=resume_disabled,
+                     help="Resume the paused download"):
             resume_download()
 
     # Cancel button with enhanced styling
     with control_cols[2]:
         cancel_disabled = st.session_state.download_status not in ["downloading", "paused"]
-        if st.button("❌ Cancel", 
-                    key="cancel_btn", 
-                    disabled=cancel_disabled,
-                    help="Cancel the current download"):
+        if st.button("❌ Cancel",
+                     key="cancel_btn",
+                     disabled=cancel_disabled,
+                     help="Cancel the current download"):
             cancel_download()
 
 # Display download status
@@ -819,11 +680,15 @@ if st.session_state.download_status in ["downloading", "paused", "error"]:
         status_class = "status-error"
 
     # Display status indicator
-    st.markdown(f"<div style='text-align: center; margin-bottom: 10px;'><span class='{status_class}'><strong>{status_indicator}</strong></span></div>", unsafe_allow_html=True)
+    st.markdown(
+        f"<div style='text-align: center; margin-bottom: 10px;'><span class='{status_class}'><strong>{status_indicator}</strong></span></div>",
+        unsafe_allow_html=True)
 
     # Display error message if in error state
     if st.session_state.download_status == "error" and st.session_state.error_message:
-        st.markdown(f"<div style='text-align: center; margin-bottom: 15px;'><span class='status-error'>{st.session_state.error_message}</span></div>", unsafe_allow_html=True)
+        st.markdown(
+            f"<div style='text-align: center; margin-bottom: 15px;'><span class='status-error'>{st.session_state.error_message}</span></div>",
+            unsafe_allow_html=True)
 
         # Add a retry button in the center
         col1, col2, col3 = st.columns([1, 2, 1])
@@ -844,51 +709,37 @@ if st.session_state.download_status in ["downloading", "paused", "error"]:
 
         # Show status message with styled text
         if st.session_state.download_status == "downloading":
-            st.session_state.status_text.markdown(f"<span class='status-downloading'>Downloading: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
+            st.session_state.status_text.markdown(
+                f"<span class='status-downloading'>Downloading: {st.session_state.download_progress * 100:.1f}%</span>",
+                unsafe_allow_html=True)
         elif st.session_state.download_status == "paused":
-            st.session_state.status_text.markdown(f"<span class='status-paused'>Paused at: {st.session_state.download_progress*100:.1f}%</span>", unsafe_allow_html=True)
+            st.session_state.status_text.markdown(
+                f"<span class='status-paused'>Paused at: {st.session_state.download_progress * 100:.1f}%</span>",
+                unsafe_allow_html=True)
 
     # Process video if status is downloading and no process is running
     if st.session_state.download_status == "downloading" and not st.session_state.download_process:
-        # Create a placeholder for the spinner
-        spinner_placeholder = st.empty()
-
-        # Define a function to process the video in a separate thread
-        def process_video_thread():
+        # Process video in a separate thread
+        with st.spinner("Processing video..."):
             try:
-                # Show spinner in the UI
-                spinner_placeholder.spinner(text="Processing video...")
-
-                # Process the video
                 output_file, error = process_video(mx_url, update_progress)
 
                 # Handle result
                 if error:
-                    st.session_state.error_message = error
-                    st.session_state.download_status = "error"
-                    # Use session state to trigger UI update instead of rerun
-                    st.session_state.ui_needs_update = True
+                    st.error(error)
+                    st.session_state.download_status = "idle"
+                    st.rerun()
                 elif output_file and os.path.exists(output_file):
                     st.session_state.download_output_file = output_file
                     st.session_state.download_status = "completed"
-                    # Use session state to trigger UI update instead of rerun
-                    st.session_state.ui_needs_update = True
+                    st.rerun()
             except Exception as e:
                 error_msg = f"An error occurred: {str(e)}"
                 st.session_state.error_message = error_msg
                 st.session_state.download_status = "error"
                 st.session_state.download_process = None
-                # Use session state to trigger UI update instead of rerun
-                st.session_state.ui_needs_update = True
-
-            # Force garbage collection after processing
-            import gc
-            gc.collect()
-
-        # Start the processing in a separate thread to avoid blocking the UI
-        processing_thread = threading.Thread(target=process_video_thread)
-        processing_thread.daemon = True  # Allow the thread to be terminated when the main program exits
-        processing_thread.start()
+                st.error(error_msg)
+                st.rerun()
 
 # Display completed download
 if st.session_state.download_status == "completed" and st.session_state.download_output_file:
@@ -897,97 +748,38 @@ if st.session_state.download_status == "completed" and st.session_state.download
     if os.path.exists(output_file):
         st.success("Video downloaded successfully!")
 
-        # Get file size without loading the entire file into memory
-        file_size_mb = os.path.getsize(output_file) / (1024 * 1024)
+        # Read video file
+        with open(output_file, "rb") as file:
+            video_bytes = file.read()
 
-        # Display video info
-        st.markdown(f"<h2 class='sub-header'>Your Video is Ready!</h2>", unsafe_allow_html=True)
-        st.info(f"File Size: {file_size_mb:.1f} MB")
+            # Get file size
+            file_size_mb = len(video_bytes) / (1024 * 1024)
 
-        # Download button - use file path instead of loading into memory
-        st.markdown("<div class='download-btn'>", unsafe_allow_html=True)
+            # Display video info
+            st.markdown(f"<h2 class='sub-header'>Your Video is Ready!</h2>", unsafe_allow_html=True)
+            st.info(f"File Size: {file_size_mb:.1f} MB")
 
-        # Create a temporary copy with a user-friendly name for download
-        download_filename = f"mxplayer_video_{int(time.time())}.mp4"
-        download_path = os.path.join(os.path.dirname(output_file), download_filename)
+            # Download button
+            st.markdown("<div class='download-btn'>", unsafe_allow_html=True)
+            st.download_button(
+                label="⬇️ Download Video",
+                data=video_bytes,
+                file_name=f"mxplayer_video_{int(time.time())}.mp4",
+                mime="video/mp4"
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
 
-        try:
-            # Copy file instead of loading into memory
-            import shutil
-            shutil.copy2(output_file, download_path)
+            # Video preview
+            st.video(video_bytes)
 
-            # Use the file path for download button
-            with open(download_path, "rb") as file:
-                # Only read a small chunk for the download button
-                # The full file will be streamed when downloaded
-                file_header = file.read(1024 * 1024)  # Read just 1MB for the button
-
-                st.download_button(
-                    label="⬇️ Download Video",
-                    data=file,  # This will stream the file instead of loading it all at once
-                    file_name=download_filename,
-                    mime="video/mp4"
-                )
-        except Exception as e:
-            st.error(f"Error preparing download: {str(e)}")
-
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Video preview - use file path instead of loading into memory
-        # This uses HTML5 video tag with direct file path to avoid loading into memory
-        try:
-            # Create a small thumbnail for preview instead of loading the full video
-            import subprocess
-
-            # Extract a thumbnail from the video
-            thumbnail_path = os.path.join(os.path.dirname(output_file), "thumbnail.jpg")
-            ffmpeg_path = find_ffmpeg_path()
-
-            if ffmpeg_path:
-                try:
-                    # Extract a frame at 1 second for thumbnail
-                    subprocess.run([
-                        ffmpeg_path, 
-                        "-i", output_file, 
-                        "-ss", "00:00:01.000", 
-                        "-vframes", "1", 
-                        "-q:v", "2", 
-                        thumbnail_path
-                    ], check=True, capture_output=True)
-
-                    # Display thumbnail instead of full video
-                    if os.path.exists(thumbnail_path):
-                        st.image(thumbnail_path, caption="Video Preview (Thumbnail)")
-                        st.info("Download the video to view the full content")
-                    else:
-                        st.warning("Video preview not available - download to view")
-                except:
-                    st.warning("Video preview not available - download to view")
-            else:
-                st.warning("Video preview not available - download to view")
-        except:
-            st.warning("Video preview not available - download to view")
-
-        # Clean up
-        try:
-            # Clean up all temporary files
-            os.remove(output_file)
-            if os.path.exists(download_path):
-                os.remove(download_path)
-            if os.path.exists(thumbnail_path):
-                os.remove(thumbnail_path)
-
-            # Clean up session state
-            st.session_state.download_output_file = None
-            st.session_state.download_status = "idle"
-            st.session_state.download_progress = 0.0
-
-            # Force garbage collection to free memory
-            import gc
-            gc.collect()
-        except Exception as e:
-            st.warning(f"Cleanup warning: {str(e)}")
-            pass
+            # Clean up
+            try:
+                os.remove(output_file)
+                st.session_state.download_output_file = None
+                st.session_state.download_status = "idle"
+                st.session_state.download_progress = 0.0
+            except:
+                pass
     else:
         st.error("Downloaded file not found. Please try again.")
         st.session_state.download_status = "idle"
