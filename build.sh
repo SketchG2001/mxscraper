@@ -29,8 +29,9 @@ unzip chromedriver-linux.zip -d ./chromedriver
 mv ./chromedriver/chromedriver-linux64/chromedriver ./chromedriver/chromedriver
 rm chromedriver-linux.zip
 
-# Make chromedriver executable
+# Make chromedriver and chrome executable
 chmod +x ./chromedriver/chromedriver
+chmod +x ./chrome/chrome-linux64/chrome
 
 echo "Build completed successfully!"
 
