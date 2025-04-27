@@ -23,24 +23,24 @@ tar -xf ffmpeg-release-i686-static.tar.xz -C $HOME/ffmpeg
 echo "Setting up FFmpeg environment variable..."
 export PATH=$HOME/ffmpeg/ffmpeg-*/bin:$PATH
 
-# Install Google Chrome in user-space (without root privileges)
-echo "Downloading and installing Google Chrome..."
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.tar.xz
+# Install Headless Chromium (No root required)
+echo "Downloading and installing Headless Chromium..."
+wget https://github.com/ellisonleao/chromix-too/releases/download/v1.0.1/chromium-linux-x64.tar.gz
 
-# Extract the tarball to $HOME
-echo "Extracting Google Chrome..."
-tar -xf google-chrome-stable_current_amd64.tar.xz -C $HOME/google-chrome
+# Extract the Chromium tarball to $HOME
+echo "Extracting Chromium..."
+tar -xvzf chromium-linux-x64.tar.gz -C $HOME/chromium
 
 # Set environment variable for Chrome binary path
-echo "Setting up Chrome environment variable..."
-export PATH=$HOME/google-chrome/google-chrome:$PATH
+echo "Setting up Chromium environment variable..."
+export PATH=$HOME/chromium/chromium-linux-x64:$PATH
 
-# Ensure Google Chrome is in the path
-echo "Verifying Google Chrome installation..."
-if [ -f "$HOME/google-chrome/google-chrome" ]; then
-    echo "Google Chrome is installed."
+# Ensure Chromium is in the path
+echo "Verifying Chromium installation..."
+if [ -f "$HOME/chromium/chromium-linux-x64/chrome" ]; then
+    echo "Chromium is installed."
 else
-    echo "Google Chrome installation failed!"
+    echo "Chromium installation failed!"
     exit 1
 fi
 
@@ -48,9 +48,9 @@ fi
 echo "Verifying FFmpeg installation..."
 ffmpeg -version
 
-# Verify Chrome installation
-echo "Verifying Chrome installation..."
-google-chrome --version
+# Verify Chromium installation
+echo "Verifying Chromium installation..."
+chromium --version
 
 # Start Streamlit app
 echo "Starting Streamlit app..."
