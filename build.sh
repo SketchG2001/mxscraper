@@ -25,11 +25,11 @@ export PATH=$HOME/ffmpeg/ffmpeg-*/bin:$PATH
 
 # Install Google Chrome in user-space (without root privileges)
 echo "Downloading and installing Google Chrome..."
-wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.tar.gz
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.tar.xz
 
 # Extract the tarball to $HOME
 echo "Extracting Google Chrome..."
-tar -xvzf google-chrome-stable_current_amd64.tar.gz -C $HOME/google-chrome
+tar -xf google-chrome-stable_current_amd64.tar.xz -C $HOME/google-chrome
 
 # Set environment variable for Chrome binary path
 echo "Setting up Chrome environment variable..."
