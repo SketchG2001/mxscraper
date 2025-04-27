@@ -27,8 +27,13 @@ export PATH=$HOME/ffmpeg/ffmpeg-*/bin:$PATH
 echo "Downloading and installing Google Chrome..."
 wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 
-# Extract the .deb package (installing Chrome locally)
-dpkg -x google-chrome-stable_current_amd64.deb $HOME/google-chrome
+# Install the .deb package using dpkg
+echo "Installing Google Chrome..."
+dpkg -i google-chrome-stable_current_amd64.deb
+
+# Fix missing dependencies (if any)
+echo "Fixing missing dependencies..."
+apt-get install -f
 
 # Set environment variable for Chrome binary path
 echo "Setting up Chrome environment variable..."
@@ -36,7 +41,7 @@ export PATH=$HOME/google-chrome/opt/google/chrome:$PATH
 
 # Ensure Google Chrome is in the path
 echo "Verifying Google Chrome installation..."
-if [ -f "$HOME/google-chrome/opt/google/chrome/google-chrome-stable" ]; then
+if [ -f "/usr/bin/google-chrome-stable" ]; then
     echo "Google Chrome is installed."
 else
     echo "Google Chrome installation failed!"
@@ -49,7 +54,7 @@ ffmpeg -version
 
 # Verify Chrome installation
 echo "Verifying Chrome installation..."
-$HOME/google-chrome/opt/google/chrome/google-chrome-stable --version
+google-chrome-stable --version
 
 # Start Streamlit app
 echo "Starting Streamlit app..."
