@@ -38,28 +38,44 @@ st.set_page_config(page_title="MX Player Video Downloader", page_icon="🎥")
 # Custom CSS for a cleaner look
 st.markdown("""
 <style>
+    /* Main layout and typography */
     .main-header {
         font-size: 2.5rem;
         margin-bottom: 1rem;
         text-align: center;
+        color: #1E88E5;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
     }
     .sub-header {
         font-size: 1.5rem;
         margin-top: 2rem;
         margin-bottom: 1rem;
+        color: #424242;
     }
     .download-btn {
         text-align: center;
         margin-top: 1rem;
     }
+
+    /* Progress bar styling */
     .stProgress > div > div > div {
         background-color: #4CAF50;
+        border-radius: 10px;
     }
+    .stProgress {
+        height: 10px;
+    }
+
+    /* Footer styling */
     .footer {
         text-align: center;
         margin-top: 3rem;
         color: #888888;
+        font-size: 0.9rem;
+        padding: 1rem;
+        border-top: 1px solid #eeeeee;
     }
+
     /* Button styling for better visibility */
     .stButton button {
         font-weight: bold;
@@ -125,11 +141,41 @@ st.markdown("""
         color: #FF0000;
         font-weight: bold;
     }
+
+    /* Input field styling */
+    .stTextInput > div > div > input {
+        border-radius: 8px;
+        border: 1px solid #dddddd;
+        padding: 0.5rem;
+        transition: all 0.3s ease;
+    }
+    .stTextInput > div > div > input:focus {
+        border-color: #4CAF50;
+        box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+    }
+
+    /* Card-like containers */
+    .card {
+        background-color: white;
+        border-radius: 10px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        margin-bottom: 1rem;
+    }
+
+    /* Expander styling */
+    .streamlit-expanderHeader {
+        font-weight: bold;
+        color: #1E88E5;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # Main header
 st.markdown("<h1 class='main-header'>MX Player Video Downloader</h1>", unsafe_allow_html=True)
+
+# Create a card-like container for the main content
+st.markdown("<div class='card'>", unsafe_allow_html=True)
 
 # Instructions
 with st.expander("How to use"):
@@ -216,6 +262,41 @@ def get_chrome_paths():
 
     return chrome_path, chromedriver_path
 
+# Cache for Chrome driver to avoid repeated initialization
+chrome_driver_cache = None
+
+# Function to get Chrome driver with caching
+def get_chrome_driver(options):
+    global chrome_driver_cache
+
+    # Return cached driver if available and not closed
+    if chrome_driver_cache:
+        try:
+            # Check if driver is still active
+            chrome_driver_cache.current_url
+            return chrome_driver_cache
+        except:
+            # Driver is closed or crashed, create a new one
+            chrome_driver_cache = None
+
+    # Get Chrome and ChromeDriver paths
+    chrome_path, chromedriver_path = get_chrome_paths()
+
+    # Initialize Chrome driver
+    try:
+        if chromedriver_path:
+            service = Service(chromedriver_path)
+            driver = webdriver.Chrome(service=service, options=options)
+        else:
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+
+        # Cache the driver
+        chrome_driver_cache = driver
+        return driver
+    except WebDriverException as e:
+        raise Exception(f"Failed to start Chrome: {str(e)}")
+
 # Function to get a random user agent
 def get_random_user_agent():
     user_agents = [
@@ -287,15 +368,10 @@ def process_video(url, progress_callback):
         # Get Chrome and ChromeDriver paths
         chrome_path, chromedriver_path = get_chrome_paths()
 
-        # Initialize Chrome driver
+        # Initialize Chrome driver using the cached driver function
         try:
-            if chromedriver_path:
-                service = Service(chromedriver_path)
-                driver = webdriver.Chrome(service=service, options=chrome_options)
-            else:
-                service = Service(ChromeDriverManager().install())
-                driver = webdriver.Chrome(service=service, options=chrome_options)
-        except WebDriverException as e:
+            driver = get_chrome_driver(chrome_options)
+        except Exception as e:
             st.session_state.download_status = "idle"
             return None, f"Failed to start Chrome: {str(e)}"
 
@@ -679,6 +755,9 @@ if st.session_state.download_status == "completed" and st.session_state.download
         st.error("Downloaded file not found. Please try again.")
         st.session_state.download_status = "idle"
         st.session_state.download_output_file = None
+
+# Close the card container
+st.markdown("</div>", unsafe_allow_html=True)
 
 # Footer
 st.markdown("<div class='footer'>Made with ❤️ by Sketch😘</div>", unsafe_allow_html=True)
