@@ -213,5 +213,10 @@ if [ -n "$RENDER" ]; then
 fi
 
 show_progress "Setup complete! Starting Streamlit app..."
-# Start your Streamlit app with reduced verbosity
-exec streamlit run mxplayer_new.py --server.headless=true
+# Start your Streamlit app with reduced verbosity and timeout
+# Use timeout to prevent hanging during startup
+timeout 300 streamlit run mxplayer_new.py --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false --server.maxUploadSize=50 --browser.gatherUsageStats=false || {
+    show_progress "Streamlit app failed to start within timeout. Retrying with minimal configuration..."
+    # Retry with minimal configuration
+    exec streamlit run mxplayer_new.py --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false --browser.gatherUsageStats=false
+}

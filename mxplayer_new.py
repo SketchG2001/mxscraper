@@ -17,8 +17,32 @@ from selenium.webdriver.common.by import By
 from selenium.common.exceptions import WebDriverException
 from webdriver_manager.chrome import ChromeDriverManager
 
-# Load environment variables
-load_dotenv()
+# Load environment variables - with timeout to prevent hanging
+try:
+    # Set a short timeout for environment loading
+    import signal
+
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Environment loading timed out")
+
+    # Set 5 second timeout for environment loading
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(5)
+
+    # Load environment variables
+    load_dotenv()
+
+    # Cancel the alarm
+    signal.alarm(0)
+except (ImportError, AttributeError):
+    # If signal module is not available (e.g., on Windows), just load normally
+    load_dotenv()
+except TimeoutError:
+    # If loading times out, continue without it
+    st.warning("Environment loading timed out, continuing with defaults")
+except Exception as e:
+    # If any other error occurs, log it and continue
+    print(f"Error loading environment: {str(e)}")
 
 # Initialize session state for download control
 if 'download_process' not in st.session_state:
@@ -196,35 +220,53 @@ with st.expander("How to use"):
 mx_url = st.text_input("Enter MX Player video URL:", placeholder="https://www.mxplayer.in/...")
 
 
-# Function to find FFmpeg path
+# Function to find FFmpeg path with timeout
 def find_ffmpeg_path():
     # First check environment variable
     ffmpeg_env = os.getenv("FFMPEG_PATH")
     if ffmpeg_env and os.path.exists(ffmpeg_env):
         return ffmpeg_env
 
+    # Import timeout handling if available
+    try:
+        import signal
+        has_signal = True
+    except (ImportError, AttributeError):
+        has_signal = False
+
+    # Define timeout handler
+    if has_signal:
+        def timeout_handler(signum, frame):
+            raise TimeoutError("FFmpeg path search timed out")
+
+        # Set 5 second timeout for FFmpeg search
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(5)
+
     try:
         # Try to find ffmpeg in PATH
         if platform.system() == "Windows":
-            result = subprocess.run(["where", "ffmpeg"], capture_output=True, text=True, check=True)
+            result = subprocess.run(["where", "ffmpeg"], capture_output=True, text=True, check=True, timeout=5)
             return result.stdout.strip().split("\n")[0]
         else:  # Linux/Mac
-            result = subprocess.run(["which", "ffmpeg"], capture_output=True, text=True, check=True)
+            result = subprocess.run(["which", "ffmpeg"], capture_output=True, text=True, check=True, timeout=5)
             return result.stdout.strip()
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, TimeoutError):
         # Check common installation paths
         common_paths = []
         if platform.system() == "Windows":
             common_paths = [
                 "ffmpeg.exe",
-                str(Path(__file__).parent / "ffmpeg.exe")
+                str(Path(__file__).parent / "ffmpeg.exe"),
+                "./bin/ffmpeg.exe"
             ]
         else:  # Linux/Mac
             common_paths = [
                 "/usr/bin/ffmpeg",
                 "/usr/local/bin/ffmpeg",
                 "/opt/homebrew/bin/ffmpeg",
-                "/app/bin/ffmpeg"  # Common path in containerized environments like Render
+                "/app/bin/ffmpeg",  # Common path in containerized environments like Render
+                "./bin/ffmpeg"      # Path from build.sh
             ]
 
         for path in common_paths:
@@ -232,6 +274,10 @@ def find_ffmpeg_path():
                 return path
 
         return None
+    finally:
+        # Ensure alarm is canceled even if an exception occurs
+        if has_signal:
+            signal.alarm(0)
 
 # Function to get Chrome and ChromeDriver paths for Render deployment
 def get_chrome_paths():
@@ -265,7 +311,7 @@ def get_chrome_paths():
 # Cache for Chrome driver to avoid repeated initialization
 chrome_driver_cache = None
 
-# Function to get Chrome driver with caching
+# Function to get Chrome driver with caching and timeout
 def get_chrome_driver(options):
     global chrome_driver_cache
 
@@ -279,11 +325,27 @@ def get_chrome_driver(options):
             # Driver is closed or crashed, create a new one
             chrome_driver_cache = None
 
-    # Get Chrome and ChromeDriver paths
-    chrome_path, chromedriver_path = get_chrome_paths()
-
-    # Initialize Chrome driver
+    # Import timeout handling if available
     try:
+        import signal
+        has_signal = True
+    except (ImportError, AttributeError):
+        has_signal = False
+
+    # Define timeout handler
+    if has_signal:
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Chrome driver initialization timed out")
+
+        # Set 30 second timeout for driver initialization
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(30)
+
+    try:
+        # Get Chrome and ChromeDriver paths
+        chrome_path, chromedriver_path = get_chrome_paths()
+
+        # Initialize Chrome driver
         if chromedriver_path:
             service = Service(chromedriver_path)
             driver = webdriver.Chrome(service=service, options=options)
@@ -293,9 +355,22 @@ def get_chrome_driver(options):
 
         # Cache the driver
         chrome_driver_cache = driver
+
+        # Cancel the alarm if it was set
+        if has_signal:
+            signal.alarm(0)
+
         return driver
+    except TimeoutError:
+        raise Exception("Chrome driver initialization timed out")
     except WebDriverException as e:
         raise Exception(f"Failed to start Chrome: {str(e)}")
+    except Exception as e:
+        raise Exception(f"Failed to initialize Chrome: {str(e)}")
+    finally:
+        # Ensure alarm is canceled even if an exception occurs
+        if has_signal:
+            signal.alarm(0)
 
 # Function to get a random user agent
 def get_random_user_agent():
@@ -690,15 +765,22 @@ if st.session_state.download_status in ["downloading", "paused", "error"]:
 
     # Process video if status is downloading and no process is running
     if st.session_state.download_status == "downloading" and not st.session_state.download_process:
-        # Process video in a separate thread
-        with st.spinner("Processing video..."):
+        # Create a placeholder for the spinner
+        spinner_placeholder = st.empty()
+
+        # Define a function to process the video in a separate thread
+        def process_video_thread():
             try:
+                # Show spinner in the UI
+                spinner_placeholder.spinner(text="Processing video...")
+
+                # Process the video
                 output_file, error = process_video(mx_url, update_progress)
 
                 # Handle result
                 if error:
-                    st.error(error)
-                    st.session_state.download_status = "idle"
+                    st.session_state.error_message = error
+                    st.session_state.download_status = "error"
                     st.rerun()
                 elif output_file and os.path.exists(output_file):
                     st.session_state.download_output_file = output_file
@@ -709,8 +791,12 @@ if st.session_state.download_status in ["downloading", "paused", "error"]:
                 st.session_state.error_message = error_msg
                 st.session_state.download_status = "error"
                 st.session_state.download_process = None
-                st.error(error_msg)
                 st.rerun()
+
+        # Start the processing in a separate thread to avoid blocking the UI
+        processing_thread = threading.Thread(target=process_video_thread)
+        processing_thread.daemon = True  # Allow the thread to be terminated when the main program exits
+        processing_thread.start()
 
 # Display completed download
 if st.session_state.download_status == "completed" and st.session_state.download_output_file:
