@@ -19,7 +19,7 @@ pip install -r requirements.txt
 mkdir -p ./chrome
 curl -SL https://storage.googleapis.com/chrome-for-testing-public/125.0.6422.78/linux64/chrome-linux64.zip -o chrome-linux.zip
 unzip chrome-linux.zip -d ./chrome
-mv ./chrome/chrome-linux64 ./chrome-linux
+# Keep chrome in the original path to match mxplayer_new.py expectations
 rm chrome-linux.zip
 
 # Download Chromedriver
