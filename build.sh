@@ -1,26 +1,35 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Exit on error
+set -o errexit
 
-# Update pip to the latest version (optional)
+# Update package lists and install system dependencies
+apt-get update
+apt-get install -y --no-install-recommends ffmpeg unzip curl
+
+# Update pip to the latest version
 pip install --upgrade pip
-
-# Activate the virtual environment (adjust this path if necessary)
-source ./.venv/bin/activate
 
 # Install dependencies from requirements.txt
 pip install -r requirements.txt
 
-# Install other necessary packages (e.g., Chrome, ffmpeg)
-# Ensure that these installations are done with sudo privileges if needed
+# Download Chrome
+mkdir -p ./chrome
+curl -SL https://storage.googleapis.com/chrome-for-testing-public/125.0.6422.78/linux64/chrome-linux64.zip -o chrome-linux.zip
+unzip chrome-linux.zip -d ./chrome
+mv ./chrome/chrome-linux64 ./chrome-linux
+rm chrome-linux.zip
 
-# Install Chrome dependencies (requires root or sudo access)
-sudo apt-get update
-sudo apt-get install -y libx11-dev libxkbfile-dev libsecret-1-dev libxrandr-dev libxtst-dev libappindicator3-dev libatk-bridge2.0-dev libgdk-pixbuf2.0-dev libnss3 libxcomposite-dev libxdamage-dev
+# Download Chromedriver
+mkdir -p ./chromedriver
+curl -SL https://storage.googleapis.com/chrome-for-testing-public/125.0.6422.78/linux64/chromedriver-linux64.zip -o chromedriver-linux.zip
+unzip chromedriver-linux.zip -d ./chromedriver
+mv ./chromedriver/chromedriver-linux64/chromedriver ./chromedriver/chromedriver
+rm chromedriver-linux.zip
 
-# Install Chrome browser (requires root or sudo access)
-sudo apt-get install -y google-chrome-stable
+# Make chromedriver executable
+chmod +x ./chromedriver/chromedriver
 
-# Install other dependencies (e.g., ffmpeg)
-sudo apt-get install -y ffmpeg
+echo "Build completed successfully!"
 
-# Start Streamlit app
-streamlit run mxplayer_new.py  # Replace with your actual app script
+# Note: For Render deployment, the actual app startup command should be specified
+# in the Render dashboard as: streamlit run mxplayer_new.py
