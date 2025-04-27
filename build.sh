@@ -2,9 +2,12 @@
 # Exit on error
 set -o errexit
 
-# Update package lists and install system dependencies
-apt-get update
-apt-get install -y --no-install-recommends ffmpeg unzip curl
+# Skip apt-get commands on Render's free tier (read-only filesystem)
+# Check if required commands are available
+echo "Checking for required system dependencies..."
+command -v ffmpeg >/dev/null 2>&1 || echo "Warning: ffmpeg not found, some functionality may be limited"
+command -v unzip >/dev/null 2>&1 || echo "Warning: unzip not found, installing Chrome may fail"
+command -v curl >/dev/null 2>&1 || echo "Warning: curl not found, installing Chrome may fail"
 
 # Update pip to the latest version
 pip install --upgrade pip
