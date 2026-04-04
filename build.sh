@@ -1,52 +1,45 @@
 #!/bin/bash
+set -e
 
-# Update pip to the latest version (optional)
-echo "Updating pip..."
-pip install --upgrade pip
+echo "=== MX Player Scraper — Ubuntu Deployment ==="
 
-# Activate the virtual environment (adjust this path if necessary)
-echo "Activating virtual environment..."
-source ./.venv/bin/activate
+# ── System packages ──────────────────────────────────────
+echo "Installing system dependencies..."
+sudo apt update
+sudo apt install -y python3 python3-pip python3-venv ffmpeg chromium-browser chromium-chromedriver
 
-# Install dependencies from requirements.txt
-echo "Installing Python dependencies..."
-pip install -r requirements.txt
-
-# Install necessary dependencies (Chrome, ffmpeg) in user space
-
-# Use the included FFmpeg from the repository
-echo "Using FFmpeg from repository..."
-export PATH=$PWD/bin:$PATH
-
-# Install Headless Chromium (No root required)
-echo "Downloading and installing Headless Chromium..."
-wget https://github.com/Zenika/alpine-chrome/releases/download/v1.0.0/alpine-chrome-x64.tar.gz
-
-# Extract the Chromium tarball to $HOME
-echo "Extracting Chromium..."
-tar -xvzf alpine-chrome-x64.tar.gz -C $HOME/chromium
-
-# Set environment variable for Chrome binary path
-echo "Setting up Chromium environment variable..."
-export PATH=$HOME/chromium/alpine-chrome-x64:$PATH
-
-# Ensure Chromium is in the path
-echo "Verifying Chromium installation..."
-if [ -f "$HOME/chromium/alpine-chrome-x64/chrome" ]; then
-    echo "Chromium is installed."
-else
-    echo "Chromium installation failed!"
-    exit 1
+# ── Python venv ──────────────────────────────────────────
+if [ ! -d ".venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv .venv
 fi
 
-# Verify FFmpeg installation
-echo "Verifying FFmpeg installation..."
-ffmpeg -version
+echo "Activating virtual environment..."
+source .venv/bin/activate
 
-# Verify Chromium installation
-echo "Verifying Chromium installation..."
-chromium --version
+echo "Installing Python dependencies..."
+pip install --upgrade pip
+pip install -r requirements.txt
 
-# Start Streamlit app
-echo "Starting Streamlit app..."
-streamlit run mxplayer_new.py --server.headless=true --server.enableCORS=false --server.enableXsrfProtection=false --browser.gatherUsageStats=false --server.port=$PORT
+# ── Verify installations ────────────────────────────────
+echo "Verifying ffmpeg..."
+ffmpeg -version | head -1
+
+echo "Verifying chromium..."
+chromium-browser --version 2>/dev/null || chromium --version 2>/dev/null || echo "Chromium installed (could not print version)"
+
+echo "Verifying yt-dlp..."
+.venv/bin/yt-dlp --version
+
+# ── Set Chrome path for Selenium ─────────────────────────
+export CHROMEDRIVER_PATH=$(which chromedriver 2>/dev/null || echo "/usr/bin/chromedriver")
+
+# ── Start Streamlit ──────────────────────────────────────
+PORT="${PORT:-8510}"
+echo "Starting Streamlit on port $PORT..."
+exec .venv/bin/streamlit run mxplayer_new.py \
+    --server.headless=true \
+    --server.enableCORS=false \
+    --server.enableXsrfProtection=false \
+    --browser.gatherUsageStats=false \
+    --server.port="$PORT"
