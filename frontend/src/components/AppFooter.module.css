@@ -1,0 +1,126 @@
+.footer {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  background: #050506;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.8125rem;
+}
+
+.inner {
+  max-width: var(--layout-content-max, 1680px);
+  margin: 0 auto;
+  padding: 40px var(--layout-pad, 20px) 28px;
+}
+
+.top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 2fr);
+  gap: clamp(28px, 5vw, 48px);
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .top {
+    grid-template-columns: 1fr;
+  }
+}
+
+.brandCol {
+  padding-right: 12px;
+}
+
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.03em;
+  color: #fff;
+  text-decoration: none;
+}
+
+.logo:hover {
+  color: var(--accent, #5b9cfa);
+}
+
+.tagline {
+  margin: 10px 0 0;
+  max-width: 28ch;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.8rem;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px 32px;
+}
+
+@media (max-width: 560px) {
+  .columns {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 380px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+.colTitle {
+  margin: 0 0 14px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.list li + li {
+  margin-top: 10px;
+}
+
+.link {
+  color: rgba(255, 255, 255, 0.72);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.link:hover {
+  color: #fff;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--accent, #5b9cfa);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.bottom {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
+}
+
+.copy {
+  margin: 0;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.38);
+  line-height: 1.5;
+}
+
+.creditWrap {
+  margin-top: 10px;
+}

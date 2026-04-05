@@ -1,14 +1,2 @@
-# Core dependencies
-streamlit>=1.0.0
-selenium>=4.0.0
-python-dotenv>=0.19.0
-webdriver-manager>=3.8.0
-yt-dlp>=2023.0.0
-
-# Required by Streamlit
-pillow
-requests
-toml
-
-# Optional dependencies - will be installed as needed
-# beautifulsoup4  # Not used in current implementation
+# Install backend dependencies (FastAPI app lives in backend/)
+-r backend/requirements.txt

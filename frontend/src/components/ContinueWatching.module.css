@@ -1,0 +1,130 @@
+.wrap {
+  margin-bottom: clamp(16px, 3vw, 28px);
+  padding-bottom: clamp(16px, 3vw, 24px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.head {
+  margin-bottom: 14px;
+}
+
+.titleWrap {
+  max-width: none;
+  margin-bottom: 6px;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.rail {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.rail::-webkit-scrollbar {
+  height: 6px;
+}
+
+.rail::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+
+.card {
+  flex: 0 0 168px;
+  width: 168px;
+  text-decoration: none;
+  color: inherit;
+  scroll-snap-align: start;
+  border-radius: var(--radius-md);
+  transition: transform 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.thumbWrap {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
+  aspect-ratio: 16 / 9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumbPh {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    145deg,
+    rgba(91, 156, 250, 0.2) 0%,
+    var(--bg-card) 55%,
+    rgba(139, 92, 246, 0.15) 100%
+  );
+}
+
+.badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 9px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(47, 143, 255, 0.35);
+}
+
+.bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--accent);
+  max-width: 100%;
+  pointer-events: none;
+}
+
+.cardTitle {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.meta {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}

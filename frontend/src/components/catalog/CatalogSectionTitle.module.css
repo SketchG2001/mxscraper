@@ -1,0 +1,38 @@
+.wrap {
+  max-width: 56ch;
+}
+
+.title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.titleSection {
+  margin: 0 0 8px;
+  font-size: clamp(1.15rem, 2.2vw, 1.35rem);
+}
+
+.titleRow {
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.chev {
+  font-size: 1.1em;
+  font-weight: 500;
+  color: var(--accent);
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.sub {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}

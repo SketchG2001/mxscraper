@@ -1,0 +1,13 @@
+.line {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.heart {
+  display: inline-block;
+  margin: 0 0.2em;
+  vertical-align: -0.05em;
+}
