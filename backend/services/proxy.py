@@ -67,21 +67,35 @@ class _Handler(BaseHTTPRequestHandler):
             if rng:
                 headers["Range"] = rng
 
-            resp = _req.request(
-                method, target,
-                headers=headers,
-                timeout=30,
-                stream=False,
-                allow_redirects=True,
-            )
+            try:
+                resp = _req.request(
+                    method, target,
+                    headers=headers,
+                    timeout=30,
+                    stream=False,
+                    allow_redirects=True,
+                )
+            except _req.exceptions.SSLError:
+                resp = _req.request(
+                    method, target,
+                    headers=headers,
+                    timeout=30,
+                    stream=False,
+                    allow_redirects=True,
+                    verify=False,
+                )
 
             body = resp.content
             ct = resp.headers.get("Content-Type", "application/octet-stream")
 
             if "mpegurl" in ct.lower() or target.endswith(".m3u8"):
+                proto = self.headers.get("X-Forwarded-Proto", "http")
                 host = self.headers.get("Host", f"127.0.0.1:{PROXY_PORT}")
+                prefix = (self.headers.get("X-Forwarded-Prefix") or "").strip("/")
+                proxy_origin = f"{proto}://{host}"
+                proxy_base = f"{proxy_origin}/{prefix}/" if prefix else f"{proxy_origin}/"
                 body = _rewrite_m3u8(
-                    body.decode("utf-8", errors="replace"), target, host
+                    body.decode("utf-8", errors="replace"), target, proxy_base
                 ).encode("utf-8")
                 ct = "application/vnd.apple.mpegurl"
 
@@ -107,9 +121,10 @@ class _Handler(BaseHTTPRequestHandler):
                 self.wfile.write(msg)
 
 
-def _rewrite_m3u8(content: str, manifest_url: str, host: str = "") -> str:
+def _rewrite_m3u8(content: str, manifest_url: str, proxy_base: str = "") -> str:
     """Rewrite every URL in an m3u8 manifest to route through the proxy."""
-    proxy_base = f"http://{host or f'127.0.0.1:{PROXY_PORT}'}/"
+    if not proxy_base:
+        proxy_base = f"http://127.0.0.1:{PROXY_PORT}/"
     lines = content.splitlines()
     out: list[str] = []
 
