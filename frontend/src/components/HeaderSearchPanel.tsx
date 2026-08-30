@@ -2,11 +2,14 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { extractBrowser, resolveUrl, searchMx } from '../lib/api'
+import { isAndroidNative } from '../lib/apiBase'
 import type { ContentItem } from '../types/api'
+import { FeedbackState } from './FeedbackState'
 import styles from './HeaderSearchPanel.module.css'
 
 type Props = {
   onClose: () => void
+  fullscreen?: boolean
 }
 
 function browseUrl(item: ContentItem): string {
@@ -16,11 +19,19 @@ function browseUrl(item: ContentItem): string {
   return `/browse/${encodeURIComponent(item.id)}?${q}`
 }
 
-export function HeaderSearchPanel({ onClose }: Props) {
+export function HeaderSearchPanel({ onClose, fullscreen = false }: Props) {
   const navigate = useNavigate()
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [draft, setDraft] = useState('')
   const [q, setQ] = useState('')
   const [urlInput, setUrlInput] = useState('')
+  const [linkError, setLinkError] = useState<string | null>(null)
+  const android = isAndroidNative()
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setQ(draft.trim()), 300)
+    return () => window.clearTimeout(t)
+  }, [draft])
 
   const searchQuery = useQuery({
     queryKey: ['search', q],
@@ -49,7 +60,10 @@ export function HeaderSearchPanel({ onClose }: Props) {
           return
         }
       }
-      alert('Could not navigate from this URL — open API response in Network tab.')
+      setLinkError('Could not open that link.')
+    },
+    onError: (err: unknown) => {
+      setLinkError(err instanceof Error ? err.message : 'Could not open that link.')
     },
   })
 
@@ -74,15 +88,17 @@ export function HeaderSearchPanel({ onClose }: Props) {
         onClose()
         return
       }
-      alert('Extract finished but no navigation target — check response.')
+      setLinkError('Extract finished but nothing to open.')
+    },
+    onError: (err: unknown) => {
+      setLinkError(err instanceof Error ? err.message : 'Extract failed.')
     },
   })
 
   const submitSearch = useCallback((e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    setQ(String(fd.get('q') ?? '').trim())
-  }, [])
+    setQ(draft.trim())
+  }, [draft])
 
   const goItem = useCallback(
     (item: ContentItem) => {
@@ -97,81 +113,153 @@ export function HeaderSearchPanel({ onClose }: Props) {
     return () => window.clearTimeout(t)
   }, [])
 
+  const items = searchQuery.data?.items ?? []
+  const empty =
+    q.length >= 2 &&
+    !searchQuery.isFetching &&
+    !searchQuery.isError &&
+    items.length === 0
+
   return (
-    <div className={styles.panel} id="header-search-panel" role="region" aria-label="Search and open link">
+    <div
+      className={`${styles.panel} ${fullscreen ? styles.panelFullscreen : ''}`}
+      id="header-search-panel"
+      role="region"
+      aria-label="Search"
+    >
       <div className={styles.inner}>
         <div className={styles.headRow}>
-          <div>
-            <h2 className={styles.panelTitle}>Search catalog</h2>
-            <p className={styles.panelHint}>
-              Find by title, or paste an MX Player link below.
-            </p>
-          </div>
-          <button type="button" className={styles.closeBtn} onClick={onClose}>
-            Close
-          </button>
+          {fullscreen ? (
+            <button
+              type="button"
+              className={styles.iconClose}
+              onClick={onClose}
+              aria-label="Back"
+            >
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden>
+                <path
+                  d="M15 5l-7 7 7 7"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          ) : (
+            <div>
+              <h2 className={styles.panelTitle}>Search catalog</h2>
+              <p className={styles.panelHint}>
+                Find by title, or paste an MX Player link below.
+              </p>
+            </div>
+          )}
+          {fullscreen ? (
+            <h2 className={styles.panelTitle}>Search</h2>
+          ) : (
+            <button type="button" className={styles.closeBtn} onClick={onClose}>
+              Close
+            </button>
+          )}
         </div>
 
         <form className={styles.form} onSubmit={submitSearch} role="search">
           <label htmlFor="header-search-q" className="visuallyHidden">
             Search query
           </label>
-          <input
-            ref={searchInputRef}
-            id="header-search-q"
-            name="q"
-            className={styles.input}
-            placeholder="Title, show, movie…"
-            defaultValue=""
-            autoComplete="off"
-          />
-          <button type="submit" className={styles.submit}>
-            Search
-          </button>
+          <div className={styles.fieldWrap}>
+            <input
+              ref={searchInputRef}
+              id="header-search-q"
+              name="q"
+              className={styles.input}
+              placeholder="Title, show, movie…"
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              autoComplete="off"
+              enterKeyHint="search"
+              inputMode="search"
+            />
+            {draft ? (
+              <button
+                type="button"
+                className={styles.clearBtn}
+                aria-label="Clear search"
+                onClick={() => {
+                  setDraft('')
+                  setQ('')
+                  searchInputRef.current?.focus()
+                }}
+              >
+                ×
+              </button>
+            ) : null}
+          </div>
+          {!fullscreen ? (
+            <button type="submit" className={styles.submit}>
+              Search
+            </button>
+          ) : null}
         </form>
 
         {searchQuery.isFetching && (
-          <div className={styles.loadingRow} aria-live="polite">
-            <span className={styles.shimmer} />
-            <span className={styles.loadingMuted}>Searching catalog…</span>
+          <div className={styles.resultsSkel} aria-busy="true" aria-label="Searching">
+            <div className={styles.skelRow} />
+            <div className={styles.skelRow} />
+            <div className={styles.skelRow} />
           </div>
         )}
         {searchQuery.isError && (
-          <p className={styles.error} role="alert">
-            {String(searchQuery.error)}
-          </p>
+          <FeedbackState
+            title="Something went wrong"
+            message="We couldn't search the catalog."
+            onRetry={() => void searchQuery.refetch()}
+          />
         )}
+        {empty ? (
+          <FeedbackState
+            title="No results"
+            message={`Nothing matched “${q}”.`}
+          />
+        ) : null}
 
-        {searchQuery.data?.items && searchQuery.data.items.length > 0 && (
+        {items.length > 0 && (
           <div className={styles.resultsWrap}>
             <div className={styles.resultsHead}>
               <h3 className={styles.h2}>Results</h3>
               <span className={styles.count}>
-                {searchQuery.data.items.length} title
-                {searchQuery.data.items.length === 1 ? '' : 's'}
+                {items.length} title{items.length === 1 ? '' : 's'}
               </span>
             </div>
-            <ul className={styles.grid}>
-              {searchQuery.data.items.map((item) => (
+            <ul className={fullscreen ? styles.list : styles.grid}>
+              {items.map((item) => (
                 <li key={item.id}>
                   <button
                     type="button"
-                    className={styles.cardBtn}
+                    className={fullscreen ? styles.rowBtn : styles.cardBtn}
                     onClick={() => goItem(item)}
                   >
                     {item.image ? (
                       <img
                         src={item.image}
                         alt=""
-                        className={styles.thumb}
+                        className={fullscreen ? styles.rowThumb : styles.thumb}
                         loading="lazy"
                         decoding="async"
                       />
                     ) : (
-                      <div className={styles.thumbPlaceholder}>No poster</div>
+                      <div
+                        className={
+                          fullscreen ? styles.rowThumbPh : styles.thumbPlaceholder
+                        }
+                      >
+                        {fullscreen ? '' : 'No poster'}
+                      </div>
                     )}
-                    <span className={styles.cardTitle}>{item.title}</span>
-                    <span className={styles.badge}>{item.type || 'content'}</span>
+                    <span className={fullscreen ? styles.rowMeta : undefined}>
+                      <span className={styles.cardTitle}>{item.title}</span>
+                      <span className={styles.badge}>{item.type || 'content'}</span>
+                    </span>
                   </button>
                 </li>
               ))}
@@ -179,56 +267,60 @@ export function HeaderSearchPanel({ onClose }: Props) {
           </div>
         )}
 
-        <div className={styles.linkBlock}>
-          <h3 className={styles.linkTitle}>Open from link</h3>
-          <p className={styles.muted}>
-            Paste an <code>mxplayer.in</code> URL — load via API or extract in the browser if
-            the API cannot resolve it.
-          </p>
-          <div className={styles.urlRow}>
-            <input
-              className={styles.input}
-              value={urlInput}
-              onChange={(e) => setUrlInput(e.target.value)}
-              placeholder="https://www.mxplayer.in/..."
-              aria-label="MX Player page URL"
-              autoComplete="url"
-            />
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={resolveMut.isPending}
-              onClick={() => {
-                if (!urlInput.includes('mxplayer.in')) {
-                  alert('Enter a valid MX Player URL.')
-                  return
-                }
-                resolveMut.mutate(urlInput)
-              }}
-            >
-              {resolveMut.isPending ? '…' : 'Load via API'}
-            </button>
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={extractMut.isPending}
-              onClick={() => {
-                if (!urlInput.includes('mxplayer.in')) {
-                  alert('Enter a valid MX Player URL.')
-                  return
-                }
-                extractMut.mutate(urlInput)
-              }}
-            >
-              {extractMut.isPending ? 'Extracting…' : 'Extract via browser'}
-            </button>
-          </div>
-          {(resolveMut.isError || extractMut.isError) && (
-            <p className={styles.error}>
-              {String(resolveMut.error || extractMut.error)}
+        {!android ? (
+          <div className={styles.linkBlock}>
+            <h3 className={styles.linkTitle}>Open from link</h3>
+            <p className={styles.muted}>
+              Paste an <code>mxplayer.in</code> URL — load via API or extract in the
+              browser if the API cannot resolve it.
             </p>
-          )}
-        </div>
+            <div className={styles.urlRow}>
+              <input
+                className={styles.input}
+                value={urlInput}
+                onChange={(e) => setUrlInput(e.target.value)}
+                placeholder="https://www.mxplayer.in/..."
+                aria-label="MX Player page URL"
+                autoComplete="url"
+              />
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={resolveMut.isPending}
+                onClick={() => {
+                  setLinkError(null)
+                  if (!urlInput.includes('mxplayer.in')) {
+                    setLinkError('Enter a valid MX Player URL.')
+                    return
+                  }
+                  resolveMut.mutate(urlInput)
+                }}
+              >
+                {resolveMut.isPending ? '…' : 'Load via API'}
+              </button>
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={extractMut.isPending}
+                onClick={() => {
+                  setLinkError(null)
+                  if (!urlInput.includes('mxplayer.in')) {
+                    setLinkError('Enter a valid MX Player URL.')
+                    return
+                  }
+                  extractMut.mutate(urlInput)
+                }}
+              >
+                {extractMut.isPending ? 'Extracting…' : 'Extract via browser'}
+              </button>
+            </div>
+            {linkError ? (
+              <p className={styles.error} role="alert">
+                {linkError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   )

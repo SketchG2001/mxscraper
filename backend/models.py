@@ -145,3 +145,30 @@ class ExtractBrowserResponse(BaseModel):
     seasons: list[Season] = Field(default_factory=list)
     episodes: list[ContentItem] = Field(default_factory=list)
     direct_stream_url: str | None = None
+
+
+class DownloadCreateRequest(BaseModel):
+    content_id: str = Field(..., min_length=1, max_length=80)
+    type: str = "movie"
+    season_id: str | None = None
+    language: str | None = Field(None, max_length=16)
+    quality: str | None = Field(None, max_length=32)
+    ref_title: str | None = Field(None, min_length=2, max_length=220)
+    title: str | None = Field(None, max_length=220)
+
+
+class DownloadJobResponse(BaseModel):
+    job_id: str
+    content_id: str
+    title: str
+    status: str
+    progress: float = 0.0
+    bytes_downloaded: int | None = None
+    total_bytes: int | None = None
+    speed: float | None = None
+    eta: int | None = None
+    filename: str | None = None
+    file_available: bool = False
+    error: str | None = None
+    created_at: float
+    completed_at: float | None = None

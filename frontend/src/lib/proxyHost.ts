@@ -1,4 +1,4 @@
-import { getApiBase } from './apiBase'
+import { getApiBase, isAndroidNative } from './apiBase'
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]'])
 
@@ -12,6 +12,8 @@ function isLoopbackHost(hostname: string): boolean {
  * names breaks some browsers (requests stuck, “Provisional headers”).
  */
 export function getProxyHost(): string {
+  if (isAndroidNative()) return '127.0.0.1'
+
   const override = import.meta.env.VITE_PROXY_HOST
   if (override) return override
 

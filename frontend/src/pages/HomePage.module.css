@@ -8,12 +8,11 @@
   display: flex;
   flex-direction: column;
   gap: clamp(24px, 4vw, 40px);
+  padding: 0 var(--layout-pad, 16px) var(--space-lg);
 }
 
 .heroShell {
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
-  max-width: 100vw;
+  width: 100%;
 }
 
 .heroInner {
@@ -21,10 +20,52 @@
   max-width: 52ch;
 }
 
-.heroLoading {
-  margin: 0;
-  font-size: 0.95rem;
-  color: rgba(255, 255, 255, 0.55);
+.heroSkelTitle,
+.heroSkelLine,
+.heroSkelLineShort {
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.16) 45%,
+    rgba(255, 255, 255, 0.08) 90%
+  );
+  background-size: 200% 100%;
+  animation: heroShimmer 1.2s ease-in-out infinite;
+}
+
+.heroSkelTitle {
+  height: 28px;
+  width: min(280px, 80%);
+  margin-bottom: 12px;
+}
+
+.heroSkelLine {
+  height: 12px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.heroSkelLineShort {
+  height: 12px;
+  width: 55%;
+}
+
+@keyframes heroShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heroSkelTitle,
+  .heroSkelLine,
+  .heroSkelLineShort {
+    animation: none;
+  }
 }
 
 .kicker {

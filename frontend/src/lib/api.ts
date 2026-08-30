@@ -1,6 +1,7 @@
 import type {
   BannersResponse,
   ContentDetailResponse,
+  DownloadJob,
   ExtractBrowserResponse,
   HealthResponse,
   ResolveResponse,
@@ -38,6 +39,26 @@ async function parseJson<T>(res: Response): Promise<T> {
 export async function fetchHealth(): Promise<HealthResponse> {
   const res = await fetch(apiUrl('/health'))
   return parseJson<HealthResponse>(res)
+}
+
+/** Poll existing /health until the loopback FastAPI is up (Android startup). */
+export async function waitForHealth(
+  timeoutMs = 30000,
+  intervalMs = 250,
+): Promise<HealthResponse> {
+  const deadline = Date.now() + timeoutMs
+  let last: unknown
+  while (Date.now() < deadline) {
+    try {
+      const health = await fetchHealth()
+      if (health.status === 'ok') return health
+      last = new Error(`health status ${health.status}`)
+    } catch (err) {
+      last = err
+    }
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  throw last instanceof Error ? last : new Error('local API not ready')
 }
 
 export async function searchMx(q: string): Promise<SearchResponse> {
@@ -99,16 +120,65 @@ export async function fetchEpisodes(seasonId: string): Promise<{
 export async function fetchStream(
   contentId: string,
   contentType: string,
-  accessToken: string,
   seasonId?: string | null,
   refTitle?: string | null,
 ): Promise<StreamResponse> {
   const q = new URLSearchParams({ type: contentType })
   if (seasonId) q.set('season_id', seasonId)
   if (refTitle?.trim()) q.set('ref_title', refTitle.trim())
-  const res = await fetch(
-    apiUrl(`/api/stream/${encodeURIComponent(contentId)}?${q}`),
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-  )
+  const res = await fetch(apiUrl(`/api/stream/${encodeURIComponent(contentId)}?${q}`))
   return parseJson<StreamResponse>(res)
+}
+
+export type DownloadCreateBody = {
+  content_id: string
+  type: string
+  season_id?: string | null
+  language?: string | null
+  quality?: string | null
+  ref_title?: string | null
+  title?: string | null
+}
+
+export async function createDownload(
+  body: DownloadCreateBody,
+): Promise<DownloadJob> {
+  const res = await fetch(apiUrl('/api/downloads'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      content_id: body.content_id,
+      type: body.type,
+      season_id: body.season_id || undefined,
+      language: body.language || undefined,
+      quality: body.quality || undefined,
+      ref_title: body.ref_title || undefined,
+      title: body.title || undefined,
+    }),
+  })
+  return parseJson<DownloadJob>(res)
+}
+
+export async function fetchDownload(jobId: string): Promise<DownloadJob> {
+  const res = await fetch(apiUrl(`/api/downloads/${encodeURIComponent(jobId)}`))
+  return parseJson<DownloadJob>(res)
+}
+
+export async function cancelDownload(jobId: string): Promise<DownloadJob> {
+  const res = await fetch(
+    apiUrl(`/api/downloads/${encodeURIComponent(jobId)}/cancel`),
+    { method: 'POST' },
+  )
+  return parseJson<DownloadJob>(res)
+}
+
+export async function fetchDownloadFile(jobId: string): Promise<Blob> {
+  const res = await fetch(apiUrl(`/api/downloads/${encodeURIComponent(jobId)}/file`))
+  if (!res.ok) {
+    const text = await res.text()
+    throw new ApiError(res.status, text || res.statusText)
+  }
+  return res.blob()
 }

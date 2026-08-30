@@ -63,7 +63,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 16px;
+  min-height: var(--touch-min);
+  padding: 0 16px;
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
   font-weight: 600;
@@ -82,7 +83,8 @@
 .linkBtnGhost {
   display: inline-flex;
   align-items: center;
-  padding: 10px 14px;
+  min-height: var(--touch-min);
+  padding: 0 14px;
   border-radius: var(--radius-sm);
   font-size: 0.875rem;
   font-weight: 500;

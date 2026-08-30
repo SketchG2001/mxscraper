@@ -1,0 +1,112 @@
+apply plugin: 'com.android.application'
+apply plugin: 'com.chaquo.python'
+
+def androidLocalApiFile = file("${rootProject.projectDir}/../src/lib/androidLocalApi.json")
+def androidLocalApi = new groovy.json.JsonSlurper().parse(androidLocalApiFile)
+
+android {
+    namespace = "com.mxscraper.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig true
+    }
+    defaultConfig {
+        applicationId "com.mxscraper.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        // Must match frontend/src/lib/androidLocalApi.json
+        buildConfigField "int", "LOCAL_API_PORT", "${androidLocalApi.port}"
+        buildConfigField "String", "LOCAL_API_HOST", "\"${androidLocalApi.host}\""
+        ndk {
+            abiFilters "arm64-v8a", "x86_64"
+        }
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        release {
+            def storePath = project.findProperty('MX_RELEASE_STORE_FILE')
+            if (storePath) {
+                storeFile file(storePath)
+                storePassword project.findProperty('MX_RELEASE_STORE_PASSWORD')
+                keyAlias project.findProperty('MX_RELEASE_KEY_ALIAS')
+                keyPassword project.findProperty('MX_RELEASE_KEY_PASSWORD')
+            } else {
+                def debugStore = file("${System.getProperty('user.home')}/.android/debug.keystore")
+                if (debugStore.exists()) {
+                    storeFile debugStore
+                    storePassword 'android'
+                    keyAlias 'androiddebugkey'
+                    keyPassword 'android'
+                }
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Play Store: set MX_RELEASE_STORE_FILE / PASSWORD / KEY_ALIAS / KEY_PASSWORD.
+            // Without those, fall back to the Android debug keystore for local sideload only.
+            signingConfig signingConfigs.release
+        }
+    }
+    lint {
+        // SDK path in machine-local local.properties; not part of the app binary.
+        disable 'PropertyEscape'
+        warningsAsErrors false
+        abortOnError true
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+// Existing backend/ (not a copy). Pip set is Android-only — do not use backend/requirements.txt.
+chaquopy {
+    defaultConfig {
+        // 3.14 cannot run pydantic 1.10; pydantic 2 has no Android wheel.
+        version = "3.12"
+        buildPython "py", "-3.12"
+        pip {
+            install "-r", "chaquopy-requirements.txt"
+        }
+    }
+    sourceSets {
+        getByName("main") {
+            srcDir "../../../backend"
+        }
+    }
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

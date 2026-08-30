@@ -103,8 +103,8 @@ export function WatchBelowFold({
               {movieBrowse.label}
             </Link>
           ) : null}
-          <Link to="/browse" className={styles.linkBtnGhost}>
-            Browse catalog
+          <Link to="/" className={styles.linkBtnGhost}>
+            Home
           </Link>
         </div>
       </div>
@@ -165,6 +165,7 @@ export function WatchBelowFold({
               return (
                 <li key={ep.id} className={styles.railItem}>
                   <Link
+                    replace
                     to={`/watch/${encodeURIComponent(ep.id)}?${watchQs}`}
                     state={linkStateForEpisode(ep)}
                     className={`${styles.railCard} ${isCurrent ? styles.railCardCurrent : ''}`}

@@ -4,16 +4,28 @@
 }
 
 .back {
-  display: inline-block;
-  margin-bottom: 20px;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--touch-min);
+  margin-bottom: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
   color: var(--accent);
-  text-decoration: none;
+  font: inherit;
   font-size: 0.88rem;
   font-weight: 500;
+  cursor: pointer;
 }
 
-.back:hover {
-  text-decoration: underline;
+@media (max-width: 720px) {
+  .back {
+    display: none;
+  }
+}
+
+html.mx-android .back {
+  display: none;
 }
 
 .article {

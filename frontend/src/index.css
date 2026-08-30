@@ -8,6 +8,17 @@
   --border-strong: rgba(255, 255, 255, 0.14);
   --text: #f2f4f8;
   --text-muted: #9b9fa8;
+  --text-secondary: #c4c8d0;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --touch-min: 44px;
   /* OTT-style primary blue (readable on black) */
   --accent: #2f8fff;
   --accent-hover: #5aa3ff;
@@ -40,13 +51,61 @@
 
 html {
   scroll-behavior: smooth;
+  height: 100%;
 }
 
 body {
   margin: 0;
+  min-height: 100%;
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-deep);
   color: var(--text);
+}
+
+#root {
+  min-height: 100%;
+}
+
+@media (max-width: 720px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
+html.mx-android,
+html.mx-android body,
+html.mx-android #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Immersive player fullscreen (Android CSS full-window + web FS). */
+html.mx-player-fs,
+html.mx-player-fs body {
+  overflow: hidden !important;
+  height: 100% !important;
+  overscroll-behavior: none;
+}
+
+html.mx-player-fs #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Global app chrome must disappear in true player fullscreen only. */
+html.mx-player-fs [data-app-header],
+html.mx-player-fs [data-app-bottom-nav] {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
 }
 
 :focus-visible {

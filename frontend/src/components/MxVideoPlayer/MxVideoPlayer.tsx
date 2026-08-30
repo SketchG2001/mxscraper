@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import videojs from 'video.js'
 import 'video.js/dist/video-js.css'
+import { useCompactUi } from '../../hooks/useCompactUi'
 import { proxiedUrlsMatch, type ProxiedQualitySource } from '../../lib/streamQuality'
 import {
   clearWatchProgress,
@@ -13,15 +13,23 @@ import {
 } from '../../lib/watchProgress'
 import {
   addMxQualityMenuButton,
+  applyVhsQualityLevel,
   registerMxQualityMenu,
   syncMxQualityButtonVisibility,
 } from './mxQualityMenu'
-import { applyMxPlayerReady, type PlayerWithControlBar } from './mxPlayerReady'
+import {
+  applyMxPlayerReady,
+  syncMxEpisodeButtons,
+  type PlayerWithControlBar,
+} from './mxPlayerReady'
+import { PlayerChrome, type ChromePlayer } from './playerChrome'
+import { PLAYBACK_RATES, SEEK_SECONDS, asTime } from './playerConstants'
 import styles from './MxVideoPlayer.module.css'
 
 registerMxQualityMenu()
 
 const SAVE_INTERVAL_MS = 4000
+const MAX_AUTO_RETRIES = 2
 
 type VideoPlayer = ReturnType<typeof videojs>
 
@@ -36,8 +44,12 @@ type PlayerWithQualityLevels = VideoPlayer & {
   qualityLevels?: () => QualityLevelList
 }
 
-function asTime(v: unknown): number {
-  return typeof v === 'number' && Number.isFinite(v) ? v : NaN
+function clearMediaError(p: VideoPlayer) {
+  try {
+    ;(p as unknown as { error: (v: null) => void }).error(null)
+  } catch {
+    /* */
+  }
 }
 
 function streamMimeType(url: string): string {
@@ -61,7 +73,7 @@ type Props = {
   /** Edge-to-edge OTT-style layout with in-player chrome. */
   variant?: 'default' | 'cinema'
   /** Top-left back control (cinema). */
-  backTo?: string
+  onBack?: () => void
   onPrevEpisode?: () => void
   onNextEpisode?: () => void
 }
@@ -73,11 +85,12 @@ export function MxVideoPlayer({
   coverImage,
   qualitySources,
   variant = 'default',
-  backTo,
+  onBack,
   onPrevEpisode,
   onNextEpisode,
 }: Props) {
   const videoHostRef = useRef<HTMLDivElement>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<VideoPlayer | null>(null)
   const lastSaveAt = useRef(0)
   const resumeHandled = useRef(false)
@@ -93,9 +106,16 @@ export function MxVideoPlayer({
   nextEpRef.current = onNextEpisode
 
   const cinema = variant === 'cinema'
+  const compact = useCompactUi()
 
   const [resumeSeconds, setResumeSeconds] = useState<number | null>(null)
   const [playerBroken, setPlayerBroken] = useState<string | null>(null)
+  const [streamError, setStreamError] = useState<string | null>(null)
+  const [chromePlayer, setChromePlayer] = useState<ChromePlayer | null>(null)
+  const retryCountRef = useRef(0)
+  const disposedRef = useRef(false)
+  const wantPlayOnShowRef = useRef(false)
+  const activeUrlRef = useRef('')
 
   const sourceSig =
     qualitySources?.map((s) => `${s.key}:${s.url}`).join('|') ?? ''
@@ -124,6 +144,7 @@ export function MxVideoPlayer({
     multiQuality && qualitySources
       ? (qualitySources[qualityIndex]?.url ?? playbackUrl)
       : playbackUrl
+  activeUrlRef.current = activePlaybackUrl
 
   const useVhsForQuality =
     !multiQuality &&
@@ -170,10 +191,25 @@ export function MxVideoPlayer({
   }, [flushProgress])
 
   useEffect(() => {
+    if (cinema) return
+    const p = playerRef.current
+    if (!p) return
+    syncMxEpisodeButtons(p as unknown as PlayerWithControlBar, {
+      hasPrev: Boolean(onPrevEpisode),
+      hasNext: Boolean(onNextEpisode),
+    })
+  }, [cinema, onPrevEpisode, onNextEpisode])
+
+  useEffect(() => {
     resumeHandled.current = false
     setResumeSeconds(null)
     setPlayerBroken(null)
+    setStreamError(null)
+    setChromePlayer(null)
     lastSaveAt.current = 0
+    retryCountRef.current = 0
+    disposedRef.current = false
+    wantPlayOnShowRef.current = false
 
     const host = videoHostRef.current
     if (!host || !activePlaybackUrl) return
@@ -188,18 +224,25 @@ export function MxVideoPlayer({
     let player: VideoPlayer
     try {
       player = videojs(el, {
-        controls: true,
+        controls: !cinema,
+        bigPlayButton: !cinema,
         fluid: true,
         responsive: true,
         preload: 'metadata',
-        playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
-        controlBar: {
-          skipButtons: {
-            backward: 10,
-            forward: 10,
-          },
-          remainingTimeDisplay: false,
-        },
+        playbackRates: cinema ? [...PLAYBACK_RATES] : [0.5, 0.75, 1, 1.25, 1.5, 2],
+        ...(cinema
+          ? {
+              userActions: { hotkeys: false, doubleClick: false },
+            }
+          : {
+              controlBar: {
+                skipButtons: {
+                  backward: SEEK_SECONDS,
+                  forward: SEEK_SECONDS,
+                },
+                remainingTimeDisplay: false,
+              },
+            }),
         html5: {
           vhs: { overrideNative: true },
           nativeAudioTracks: false,
@@ -227,25 +270,7 @@ export function MxVideoPlayer({
                 },
                 onPickVhs: (levelIndex: number) => {
                   const p = playerRef.current as PlayerWithQualityLevels | null
-                  const ql = p?.qualityLevels?.()
-                  if (!ql || typeof ql.length !== 'number') return
-                  if (levelIndex < 0) {
-                    for (let j = 0; j < ql.length; j++) {
-                      try {
-                        ql[j].enabled = true
-                      } catch {
-                        /* */
-                      }
-                    }
-                  } else {
-                    for (let j = 0; j < ql.length; j++) {
-                      try {
-                        ql[j].enabled = j === levelIndex
-                      } catch {
-                        /* */
-                      }
-                    }
-                  }
+                  applyVhsQualityLevel(p?.qualityLevels?.(), levelIndex)
                 },
               },
             }
@@ -335,28 +360,79 @@ export function MxVideoPlayer({
       clearWatchProgress(watchKey)
     }
 
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+
+    const reloadSrc = () => {
+      player.src({
+        src: activePlaybackUrl,
+        type: streamMimeType(activePlaybackUrl),
+      })
+    }
+
+    const onPlaying = () => {
+      retryCountRef.current = 0
+      setStreamError(null)
+    }
+
+    const onPauseSave = () => {
+      flushProgress()
+    }
+
+    const onError = () => {
+      if (disposedRef.current) return
+      let code = 0
+      let msg = 'Playback failed.'
+      try {
+        const err = player.error() as { code?: number; message?: string } | null
+        code = typeof err?.code === 'number' ? err.code : 0
+        if (err?.message) msg = err.message
+      } catch {
+        /* */
+      }
+      if (code === 1) return
+      if (retryCountRef.current < MAX_AUTO_RETRIES) {
+        retryCountRef.current += 1
+        retryTimer = window.setTimeout(() => {
+          if (disposedRef.current) return
+          try {
+            clearMediaError(player)
+            reloadSrc()
+          } catch {
+            setStreamError(msg)
+          }
+        }, 800 * retryCountRef.current)
+        return
+      }
+      setStreamError(msg)
+    }
+
     player.on('loadedmetadata', onLoaded)
     player.on('timeupdate', onTimeUpdate)
     player.on('ended', onEnded)
+    player.on('error', onError)
+    player.on('playing', onPlaying)
+    player.on('pause', onPauseSave)
 
     player.ready(() => {
-      applyMxPlayerReady(player as unknown as PlayerWithControlBar, {
-        onPrevEpisode: onPrevEpisode
-          ? () => {
-              prevEpRef.current?.()
-            }
-          : undefined,
-        onNextEpisode: onNextEpisode
-          ? () => {
-              nextEpRef.current?.()
-            }
-          : undefined,
-      })
-      addMxQualityMenuButton(player)
+      if (!cinema) {
+        applyMxPlayerReady(player as unknown as PlayerWithControlBar, {
+          onPrevEpisode: () => {
+            prevEpRef.current?.()
+          },
+          onNextEpisode: () => {
+            nextEpRef.current?.()
+          },
+        })
+        syncMxEpisodeButtons(player as unknown as PlayerWithControlBar, {
+          hasPrev: Boolean(prevEpRef.current),
+          hasNext: Boolean(nextEpRef.current),
+        })
+        addMxQualityMenuButton(player)
+      }
 
       if (showQualityControl && useVhsForQuality) {
         const bumpQualityUi = () => {
-          syncMxQualityButtonVisibility(player)
+          if (!cinema) syncMxQualityButtonVisibility(player)
           try {
             const bar = player.getChild('controlBar')
             const mb = bar?.getChild?.('MxQualityMenuButton') as
@@ -379,10 +455,49 @@ export function MxVideoPlayer({
         player.on('loadedmetadata', bumpQualityUi)
         bumpQualityUi()
       }
+
+      if (cinema && !disposedRef.current) {
+        setChromePlayer(player as unknown as ChromePlayer)
+      }
     })
 
     const onVis = () => {
-      if (document.visibilityState === 'hidden') flushProgress()
+      if (document.visibilityState === 'hidden') {
+        flushProgress()
+        try {
+          if (player.paused?.() === false) {
+            wantPlayOnShowRef.current = true
+            player.pause?.()
+          } else {
+            wantPlayOnShowRef.current = false
+          }
+        } catch {
+          wantPlayOnShowRef.current = false
+        }
+        return
+      }
+      if (disposedRef.current) return
+      try {
+        const err = player.error() as { code?: number } | null
+        if (err && err.code !== 1) {
+          if (retryCountRef.current < MAX_AUTO_RETRIES) {
+            retryCountRef.current += 1
+            clearMediaError(player)
+            reloadSrc()
+          } else {
+            setStreamError('Playback failed.')
+          }
+          return
+        }
+        if (wantPlayOnShowRef.current) {
+          wantPlayOnShowRef.current = false
+          void (player.play?.() ?? Promise.resolve()).catch(() => {
+            /* autoplay policy */
+          })
+        }
+      } catch {
+        /* */
+      }
     }
     const onBeforeUnload = () => {
       flushProgress()
@@ -391,11 +506,17 @@ export function MxVideoPlayer({
     window.addEventListener('beforeunload', onBeforeUnload)
 
     return () => {
+      disposedRef.current = true
+      setChromePlayer(null)
+      if (retryTimer != null) window.clearTimeout(retryTimer)
       window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('visibilitychange', onVis)
       player.off('loadedmetadata', onLoaded)
       player.off('timeupdate', onTimeUpdate)
       player.off('ended', onEnded)
+      player.off('error', onError)
+      player.off('playing', onPlaying)
+      player.off('pause', onPauseSave)
       disposePlayer()
       if (videoHostRef.current) videoHostRef.current.innerHTML = ''
     }
@@ -404,8 +525,6 @@ export function MxVideoPlayer({
     watchKey,
     disposePlayer,
     flushProgress,
-    onPrevEpisode,
-    onNextEpisode,
     cinema,
     showQualityControl,
     useVhsForQuality,
@@ -443,6 +562,61 @@ export function MxVideoPlayer({
     }
   }, [watchKey])
 
+  const handleRetryStream = useCallback(() => {
+    const p = playerRef.current
+    const url = activeUrlRef.current
+    if (!p || !url) return
+    retryCountRef.current = 0
+    setStreamError(null)
+    try {
+      clearMediaError(p)
+      p.src({ src: url, type: streamMimeType(url) })
+      void (p.play?.() ?? Promise.resolve()).catch(() => {})
+    } catch (e) {
+      setStreamError(e instanceof Error ? e.message : 'Playback failed.')
+    }
+  }, [])
+
+  const onPickQualityUrl = useCallback((i: number) => {
+    if (i === qualityIndexRef.current) return
+    try {
+      const cur = asTime(playerRef.current?.currentTime?.())
+      if (Number.isFinite(cur) && cur > 0.25) {
+        seekAfterLoadRef.current = cur
+      }
+    } catch {
+      /* */
+    }
+    setQualityIndex(i)
+  }, [])
+
+  useEffect(() => {
+    const onMxBack = (e: Event) => {
+      if (resumeSeconds != null) {
+        e.preventDefault()
+        setResumeSeconds(null)
+        return
+      }
+      if (streamError) {
+        e.preventDefault()
+        setStreamError(null)
+        return
+      }
+      if (cinema) return
+      const p = playerRef.current
+      try {
+        if (p && typeof p.isFullscreen === 'function' && p.isFullscreen()) {
+          e.preventDefault()
+          void p.exitFullscreen()
+        }
+      } catch {
+        /* */
+      }
+    }
+    window.addEventListener('mx-android-back', onMxBack)
+    return () => window.removeEventListener('mx-android-back', onMxBack)
+  }, [resumeSeconds, streamError, cinema])
+
   const onShellKeyDown = useCallback((e: React.KeyboardEvent) => {
     const p = playerRef.current
     if (!p) return
@@ -476,7 +650,7 @@ export function MxVideoPlayer({
       try {
         const cur = asTime(p.currentTime?.())
         if (!Number.isFinite(cur)) return
-        p.currentTime?.(Math.max(0, cur - 10))
+        p.currentTime?.(Math.max(0, cur - SEEK_SECONDS))
       } catch {
         /* */
       }
@@ -488,7 +662,7 @@ export function MxVideoPlayer({
         const dur = asTime(p.duration?.())
         const cur = asTime(p.currentTime?.())
         if (!Number.isFinite(cur)) return
-        const next = cur + 10
+        const next = cur + SEEK_SECONDS
         const cap =
           Number.isFinite(dur) && dur > 0 ? Math.min(next, dur) : next
         p.currentTime?.(cap)
@@ -512,22 +686,34 @@ export function MxVideoPlayer({
 
   return (
     <div
+      ref={shellRef}
       className={shellClass}
       tabIndex={0}
       role="region"
       aria-label={`Video player: ${title}`}
       onKeyDown={onShellKeyDown}
     >
-      {cinema && backTo ? (
-        <Link to={backTo} className={styles.backOverlay}>
-          <span className={styles.backIcon} aria-hidden>
-            ←
-          </span>
-          <span className={styles.srOnly}>Back</span>
-        </Link>
+      {streamError ? (
+        <div className={styles.resumeOverlay} role="alert">
+          <div className={styles.resumeCard}>
+            <p className={styles.resumeTitle}>Unable to play video</p>
+            <p className={styles.resumeMeta}>
+              {streamError.trim() || 'Something went wrong.'}
+            </p>
+            <div className={styles.resumeActions}>
+              <button
+                type="button"
+                className={styles.resumePrimary}
+                onClick={handleRetryStream}
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
-      {resumeSeconds != null && (
+      {resumeSeconds != null && !streamError && (
         <div className={styles.resumeOverlay} role="dialog" aria-modal="true">
           <div className={styles.resumeCard}>
             <p className={styles.resumeTitle}>Continue watching?</p>
@@ -556,9 +742,25 @@ export function MxVideoPlayer({
         data-vjs-player
       />
 
+      {cinema && chromePlayer ? (
+        <PlayerChrome
+          player={chromePlayer}
+          shellRef={shellRef}
+          title={title}
+          compact={compact}
+          onBack={onBack}
+          onPrevEpisode={onPrevEpisode}
+          onNextEpisode={onNextEpisode}
+          qualitySources={qualitySources}
+          qualityIndex={qualityIndex}
+          onPickQualityUrl={onPickQualityUrl}
+          useVhsForQuality={useVhsForQuality}
+        />
+      ) : null}
+
       {!cinema ? (
         <p className={styles.hints} aria-hidden="true">
-          Space play/pause · ← → seek 10s · click player then use keys
+          Space play/pause · ← → seek {SEEK_SECONDS}s · click player then use keys
         </p>
       ) : null}
     </div>

@@ -46,7 +46,7 @@ export function applyMxPlayerReady(
     bar.addChild(
       'button',
       {
-        className: 'vjs-mx-prev-episode vjs-control vjs-button',
+        className: 'vjs-mx-prev-episode vjs-control vjs-button vjs-hidden',
         controlText: 'Previous episode',
         clickHandler() {
           prevFn()
@@ -62,7 +62,7 @@ export function applyMxPlayerReady(
     bar.addChild(
       'button',
       {
-        className: 'vjs-mx-next-episode vjs-control vjs-button',
+        className: 'vjs-mx-next-episode vjs-control vjs-button vjs-hidden',
         controlText: 'Next episode',
         clickHandler() {
           nextFn()
@@ -71,4 +71,17 @@ export function applyMxPlayerReady(
       idxSf + 1,
     )
   }
+}
+
+/** Show/hide episode skip buttons without recreating the player. */
+export function syncMxEpisodeButtons(
+  player: PlayerWithControlBar,
+  flags: { hasPrev: boolean; hasNext: boolean },
+): void {
+  const barEl = player.controlBar?.el?.()
+  if (!barEl) return
+  const prev = barEl.querySelector('.vjs-mx-prev-episode')
+  const next = barEl.querySelector('.vjs-mx-next-episode')
+  prev?.classList.toggle('vjs-hidden', !flags.hasPrev)
+  next?.classList.toggle('vjs-hidden', !flags.hasNext)
 }

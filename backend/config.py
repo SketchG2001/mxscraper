@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from pydantic_settings import BaseSettings
+try:
+    from pydantic_settings import BaseSettings
+
+    _PYDANTIC_V2 = True
+except ImportError:  # Android: pydantic 1.10 (no pydantic-core wheel)
+    from pydantic import BaseSettings
+
+    _PYDANTIC_V2 = False
 
 
 class Settings(BaseSettings):
@@ -14,16 +21,46 @@ class Settings(BaseSettings):
     # Server
     port: int = 8000
     proxy_port: int = 8513
+    # HLS proxy bind. Web default is all interfaces; Android bootstrap sets 127.0.0.1.
+    proxy_bind_host: str = "0.0.0.0"
+    # Set by the Android uvicorn bootstrap (ANDROID_RUNTIME=1). Web stays false.
+    android_runtime: bool = False
+    # Loopback API port inside the APK. Keep default in sync with
+    # frontend/src/lib/androidLocalApi.json (Gradle copies that file into BuildConfig).
+    android_api_port: int = 8787
+
+    # Downloads (app-private on Android via DOWNLOAD_DIR from the bootstrap).
+    download_dir: str = ""
+    ffmpeg_path: str = ""
+    android_native_lib_dir: str = ""
+    min_download_free_bytes: int = 50 * 1024 * 1024
 
     # MX Player API
     api_base: str = "https://api.mxplayer.in/v1/web"
     cdn_image: str = "https://qqcdnpictest.mxplay.com"
     cdn_video: str = "https://llvod.mxplay.com"
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    if _PYDANTIC_V2:
+        model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    else:
+        class Config:
+            env_file = ".env"
+            env_file_encoding = "utf-8"
 
 
 settings = Settings()
+
+
+def cors_allow_origins() -> list[str]:
+    """Web keeps open CORS; Capacitor WebView is https://localhost → loopback API."""
+    if settings.android_runtime:
+        return ["https://localhost", "http://localhost"]
+    return ["*"]
+
+
+def cors_allow_credentials() -> bool:
+    return not settings.android_runtime
+
 
 # Reusable constants (kept flat for easy import)
 

@@ -46,11 +46,16 @@
   color: inherit;
   scroll-snap-align: start;
   border-radius: var(--radius-md);
-  transition: transform 0.2s ease;
 }
 
 .card:hover {
-  transform: translateY(-2px);
+  transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    transform: translateY(-2px);
+  }
 }
 
 .card:focus-visible {

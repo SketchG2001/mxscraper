@@ -17,7 +17,7 @@ from models import (
     Shelf,
     ShelvesResponse,
 )
-from services.mx_api import MXPlayerAPI, extract_seasons, parse_item
+from services.mx_api import MXPlayerAPI, extract_seasons
 
 router = APIRouter(prefix="/api", tags=["search"])
 

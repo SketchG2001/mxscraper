@@ -1,0 +1,19 @@
+# Android-only pip set (Chaquopy). Do NOT use backend/requirements.txt.
+# Excluded: selenium, webdriver-manager, uvicorn[standard], python-jose[cryptography]
+# yt-dlp is pinned (no [default] extras — avoid pycryptodomex on Android).
+#
+# pydantic 2 needs pydantic-core (Rust). There is no official Android wheel
+# on PyPI or chaquo.com/pypi-13.1. Chaquopy's documented workaround is
+# pydantic 1.10 (pure Python). FastAPI >=0.128 requires pydantic 2, so
+# Android stays on FastAPI 0.120.x. Desktop/web is unchanged (pydantic 2).
+fastapi==0.115.2
+uvicorn>=0.27.0
+pydantic==1.10.24
+python-dotenv>=0.19.0
+requests>=2.28.0
+starlette==0.38.6
+python-jose>=3.3.0
+rsa>=4.9
+ecdsa>=0.19.0
+pyasn1>=0.5.0
+yt-dlp==2026.8.19

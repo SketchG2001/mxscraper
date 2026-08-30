@@ -11,10 +11,10 @@ URL scheme (path-based):
 from __future__ import annotations
 
 import re
-import socket
 import threading
 import urllib.parse
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from socketserver import ThreadingMixIn
 
 import requests as _req
 
@@ -121,6 +121,13 @@ class _Handler(BaseHTTPRequestHandler):
                 self.wfile.write(msg)
 
 
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    """HLS fetches playlist + segments concurrently; a single-thread server serializes them."""
+
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 def _rewrite_m3u8(content: str, manifest_url: str, proxy_base: str = "") -> str:
     """Rewrite every URL in an m3u8 manifest to route through the proxy."""
     if not proxy_base:
@@ -159,25 +166,24 @@ def _rewrite_m3u8(content: str, manifest_url: str, proxy_base: str = "") -> str:
 _started = False
 
 
-def start_proxy(port: int | None = None) -> int:
+def start_proxy(port: int | None = None, host: str | None = None) -> int:
     """Start the CORS proxy in a daemon thread.
 
     Safe to call multiple times; only the first call starts the server.
+    ``host`` defaults to Settings.proxy_bind_host (0.0.0.0 on web, 127.0.0.1 on Android).
     """
     global _started
     port = port or PROXY_PORT
+    bind_host = host if host is not None else settings.proxy_bind_host
     if _started:
         return port
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        sock.bind(("0.0.0.0", port))
-        sock.close()
+        server = ThreadingHTTPServer((bind_host, port), _Handler)
     except OSError:
         _started = True
         return port
 
-    server = HTTPServer(("0.0.0.0", port), _Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     _started = True

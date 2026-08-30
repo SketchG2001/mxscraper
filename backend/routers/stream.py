@@ -1,10 +1,9 @@
-"""Stream endpoints — auth required."""
+"""Stream endpoints."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from auth import require_auth
 from dependencies import get_api
 from models import LanguageDetail, StreamOption, StreamResponse
 from services.mx_api import (
@@ -87,33 +86,15 @@ def _response_from_parsed_episode(parsed: dict) -> StreamResponse:
     )
 
 
-@router.get("/stream/{content_id}", response_model=StreamResponse)
-async def get_stream(
+def resolve_stream_response(
+    api: MXPlayerAPI,
     content_id: str,
-    type: str = Query(
-        "tvshow",
-        description="MX content type: tvshow, movie, episode, music_video, video, …",
-    ),
-    season_id: str | None = Query(
-        None,
-        description="Required for episodes: parent season id (from tvshow episodes tab).",
-    ),
-    ref_title: str | None = Query(
-        None,
-        min_length=2,
-        max_length=220,
-        description="Title from browse — used when MX detail/collection fails for this id.",
-    ),
-    title: str | None = Query(
-        None,
-        min_length=2,
-        max_length=220,
-        description="Alias for ref_title (some clients send ``title``).",
-    ),
-    _user: dict = Depends(require_auth),
-    api: MXPlayerAPI = Depends(get_api),
-):
-    """Returns stream URL and quality options. Requires authentication."""
+    type: str = "tvshow",
+    season_id: str | None = None,
+    ref_title: str | None = None,
+    title: str | None = None,
+) -> StreamResponse:
+    """Same resolution as GET /api/stream — used by playback and downloads."""
     ref_q = (ref_title or title or "").strip() or None
     t = (type or "").lower()
     if t == "episode" and season_id:
@@ -157,3 +138,39 @@ async def get_stream(
             detail="TV episodes need season_id — open the episode from the show page (season list).",
         )
     raise HTTPException(status_code=404, detail="Content not found.")
+
+
+@router.get("/stream/{content_id}", response_model=StreamResponse)
+async def get_stream(
+    content_id: str,
+    type: str = Query(
+        "tvshow",
+        description="MX content type: tvshow, movie, episode, music_video, video, …",
+    ),
+    season_id: str | None = Query(
+        None,
+        description="Required for episodes: parent season id (from tvshow episodes tab).",
+    ),
+    ref_title: str | None = Query(
+        None,
+        min_length=2,
+        max_length=220,
+        description="Title from browse — used when MX detail/collection fails for this id.",
+    ),
+    title: str | None = Query(
+        None,
+        min_length=2,
+        max_length=220,
+        description="Alias for ref_title (some clients send ``title``).",
+    ),
+    api: MXPlayerAPI = Depends(get_api),
+):
+    """Returns stream URL and quality options."""
+    return resolve_stream_response(
+        api,
+        content_id,
+        type=type,
+        season_id=season_id,
+        ref_title=ref_title,
+        title=title,
+    )

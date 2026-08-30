@@ -1,20 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { fetchBanners, fetchContent, fetchEpisodes } from '../lib/api'
+import { FeedbackState } from '../components/FeedbackState'
+import { fetchContent, fetchEpisodes } from '../lib/api'
 import { episodeProgressUi } from '../lib/watchProgress'
 import type { ContentItem } from '../types/api'
-import { useAppAuth } from '../hooks/useAppAuth'
 import { usePageMeta } from '../hooks/usePageMeta'
 import styles from './BrowsePage.module.css'
+
+function sortEpisodes(list: ContentItem[]): ContentItem[] {
+  return [...list].sort((a, b) => {
+    const sa = Number(a.sequence)
+    const sb = Number(b.sequence)
+    if (Number.isFinite(sa) && Number.isFinite(sb) && sa !== sb) return sa - sb
+    return 0
+  })
+}
 
 export function BrowsePage() {
   const { contentId } = useParams<{ contentId: string }>()
   const [searchParams] = useSearchParams()
   const type = searchParams.get('type') || 'tvshow'
   const refTitle = searchParams.get('ref_title')?.trim() || undefined
-  const auth = useAppAuth()
-
   const [seasonId, setSeasonId] = useState<string | null>(null)
 
   const detailQuery = useQuery({
@@ -32,15 +39,13 @@ export function BrowsePage() {
     enabled: Boolean(effectiveSeasonId) && type === 'tvshow',
   })
 
-  const bannersQuery = useQuery({
-    queryKey: ['banners'],
-    queryFn: () => fetchBanners(8),
-    staleTime: 30 * 60 * 1000,
-  })
-
   const item = detailQuery.data?.item
-
   const isShow = type === 'tvshow' && seasons.length > 0
+  const sortedEpisodes = useMemo(
+    () => sortEpisodes(episodesQuery.data?.episodes ?? []),
+    [episodesQuery.data?.episodes],
+  )
+  const firstEpisode = sortedEpisodes[0] ?? null
 
   const metaTitle = useMemo(() => {
     if (!contentId) return 'Browse'
@@ -64,46 +69,59 @@ export function BrowsePage() {
   if (detailQuery.isLoading) {
     return (
       <div className={styles.loadingPage} aria-busy="true" aria-label="Loading content">
-        <div className={styles.skeletonHero} />
+        <div className={styles.skeletonPoster} />
         <div className={styles.skeletonLine} />
         <div className={styles.skeletonLineShort} />
+        <div className={styles.skeletonLine} />
       </div>
     )
   }
 
   if (detailQuery.isError || !item) {
     return (
-      <p className={styles.error}>
-        {detailQuery.error instanceof Error
-          ? detailQuery.error.message
-          : 'Not found.'}
-      </p>
+      <FeedbackState
+        title="Something went wrong"
+        message="We couldn't load this title."
+        onRetry={() => void detailQuery.refetch()}
+      />
     )
+  }
+
+  const movieWatchQs = new URLSearchParams({
+    type,
+    ...(refTitle ? { ref_title: refTitle } : {}),
+  })
+  const metaBits = [
+    item.rating != null &&
+    String(item.rating).trim() &&
+    String(item.rating) !== '0'
+      ? `★ ${item.rating}`
+      : null,
+    item.year,
+    item.publisher,
+    ...(item.languages?.length ? [item.languages.slice(0, 3).join(', ')] : []),
+  ].filter(Boolean)
+
+  const episodeWatchQs = (ep: ContentItem) => {
+    const watchQs = new URLSearchParams({
+      type: 'episode',
+      seasonId: effectiveSeasonId!,
+    })
+    if (ep.title?.trim()) watchQs.set('ref_title', ep.title.trim())
+    return watchQs
+  }
+
+  const seriesState = {
+    title: firstEpisode?.title,
+    ...(firstEpisode?.image ? { coverImage: firstEpisode.image } : {}),
+    seriesContentId: contentId,
+    seriesTitle: item.title,
+    seriesType: type,
+    ...(item.rating != null ? { rating: String(item.rating) } : {}),
   }
 
   return (
     <article className={styles.page}>
-      <Link to="/" className={styles.back}>
-        ← Home
-      </Link>
-
-      {bannersQuery.data?.items && bannersQuery.data.items.length > 0 && (
-        <div className={styles.mxStrip} aria-label="More from MX Player">
-          <span className={styles.mxStripLabel}>More from MX Player</span>
-          <div className={styles.mxStripScroll}>
-            {bannersQuery.data.items.map((b) => (
-              <Link
-                key={b.id}
-                to={`/browse/${encodeURIComponent(b.id)}?type=${encodeURIComponent(b.type || 'tvshow')}`}
-                className={styles.mxStripCard}
-              >
-                <img src={b.image} alt="" loading="lazy" decoding="async" />
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className={styles.hero}>
         {item.image && (
           <img
@@ -114,39 +132,38 @@ export function BrowsePage() {
             decoding="async"
           />
         )}
-        <div>
+        <div className={styles.heroBody}>
           <h1 className={styles.title}>{item.title}</h1>
-          <p className={styles.meta}>
-            {[item.year, item.type, item.publisher].filter(Boolean).join(' · ')}
-          </p>
+          {metaBits.length > 0 ? (
+            <p className={styles.meta}>{metaBits.join('   ')}</p>
+          ) : null}
+          <div className={styles.actions}>
+            {!isShow ? (
+              <Link
+                to={`/watch/${encodeURIComponent(contentId)}?${movieWatchQs}`}
+                state={{
+                  title: item.title,
+                  ...(item.image ? { coverImage: item.image } : {}),
+                  ...(item.rating != null ? { rating: String(item.rating) } : {}),
+                }}
+                className={styles.play}
+              >
+                Play
+              </Link>
+            ) : firstEpisode && effectiveSeasonId ? (
+              <Link
+                to={`/watch/${encodeURIComponent(firstEpisode.id)}?${episodeWatchQs(firstEpisode)}`}
+                state={seriesState}
+                className={styles.play}
+              >
+                Play
+              </Link>
+            ) : episodesQuery.isLoading ? (
+              <span className={styles.playDisabled}>Play</span>
+            ) : null}
+          </div>
           {item.description && (
             <p className={styles.desc}>{item.description.slice(0, 600)}</p>
-          )}
-          {!isShow && (
-            <div className={styles.actions}>
-              {!auth.authConfigured ? (
-                <span className={styles.muted}>Configure Auth0 in .env.local to play</span>
-              ) : auth.isAuthenticated ? (
-                <Link
-                  to={`/watch/${encodeURIComponent(contentId!)}?${new URLSearchParams({
-                    type,
-                    ...(refTitle ? { ref_title: refTitle } : {}),
-                  })}`}
-                  state={{
-                    title: item.title,
-                    ...(item.image ? { coverImage: item.image } : {}),
-                    ...(item.rating != null ? { rating: String(item.rating) } : {}),
-                  }}
-                  className={styles.play}
-                >
-                  Play
-                </Link>
-              ) : (
-                <button type="button" className={styles.play} onClick={auth.login}>
-                  Log in to play
-                </button>
-              )}
-            </div>
           )}
         </div>
       </div>
@@ -167,30 +184,36 @@ export function BrowsePage() {
                 </option>
               ))}
             </select>
-            {episodesQuery.data?.episodes && (
-              <span className={styles.epCount}>
-                {episodesQuery.data.episodes.length} episode
-                {episodesQuery.data.episodes.length === 1 ? '' : 's'} loaded
-              </span>
-            )}
           </div>
 
-          {episodesQuery.isLoading && <p className={styles.muted}>Loading episodes…</p>}
-          {episodesQuery.isError && (
-            <p className={styles.error}>{String(episodesQuery.error)}</p>
+          {episodesQuery.isLoading && (
+            <div className={styles.epSkel} aria-busy="true" aria-label="Loading episodes">
+              <div className={styles.skeletonLine} />
+              <div className={styles.skeletonLine} />
+              <div className={styles.skeletonLineShort} />
+            </div>
           )}
+          {episodesQuery.isError && (
+            <FeedbackState
+              title="Couldn’t load episodes"
+              onRetry={() => void episodesQuery.refetch()}
+            />
+          )}
+          {!episodesQuery.isLoading &&
+            !episodesQuery.isError &&
+            sortedEpisodes.length === 0 && (
+              <FeedbackState
+                title="No episodes"
+                message="This season doesn’t have any episodes yet."
+              />
+            )}
           <ul className={styles.epList}>
-            {(episodesQuery.data?.episodes ?? []).map((ep: ContentItem) => {
+            {sortedEpisodes.map((ep: ContentItem) => {
               const prog =
                 effectiveSeasonId != null
                   ? episodeProgressUi(ep.id, effectiveSeasonId)
                   : null
               const desc = ep.description?.trim()
-              const watchQs = new URLSearchParams({
-                type: 'episode',
-                seasonId: effectiveSeasonId!,
-              })
-              if (ep.title?.trim()) watchQs.set('ref_title', ep.title.trim())
               return (
                 <li key={ep.id} className={styles.epItem}>
                   <div className={styles.epThumbWrap}>
@@ -234,34 +257,22 @@ export function BrowsePage() {
                     ) : null}
                   </div>
                   <div className={styles.epActions}>
-                    {!auth.authConfigured ? (
-                      <span className={styles.muted}>Auth0</span>
-                    ) : auth.isAuthenticated ? (
-                      <Link
-                        to={`/watch/${encodeURIComponent(ep.id)}?${watchQs}`}
-                        state={{
-                          title: ep.title,
-                          ...(ep.image ? { coverImage: ep.image } : {}),
-                          seriesContentId: contentId,
-                          seriesTitle: item.title,
-                          seriesType: type,
-                          ...(item.rating != null
-                            ? { rating: String(item.rating) }
-                            : {}),
-                        }}
-                        className={styles.playSm}
-                      >
-                        {prog?.showBar ? 'Resume' : 'Play'}
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        className={styles.playSm}
-                        onClick={auth.login}
-                      >
-                        Log in
-                      </button>
-                    )}
+                    <Link
+                      to={`/watch/${encodeURIComponent(ep.id)}?${episodeWatchQs(ep)}`}
+                      state={{
+                        title: ep.title,
+                        ...(ep.image ? { coverImage: ep.image } : {}),
+                        seriesContentId: contentId,
+                        seriesTitle: item.title,
+                        seriesType: type,
+                        ...(item.rating != null
+                          ? { rating: String(item.rating) }
+                          : {}),
+                      }}
+                      className={styles.playSm}
+                    >
+                      {prog?.showBar ? 'Resume' : 'Play'}
+                    </Link>
                   </div>
                 </li>
               )

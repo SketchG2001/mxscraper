@@ -13,11 +13,6 @@ export function PrivacyPage() {
       <h2>What we collect</h2>
       <ul>
         <li>
-          <strong>Account sign-in:</strong> If you log in, authentication may be handled by
-          Auth0 (or a similar provider). That provider processes credentials according to
-          its own policy.
-        </li>
-        <li>
           <strong>Watch progress:</strong> Resume position and related metadata may be
           stored locally in your browser (for example in <code>localStorage</code>) so you
           can continue watching on this device.
@@ -35,8 +30,7 @@ export function PrivacyPage() {
       </p>
       <h2>Your choices</h2>
       <p>
-        You can clear site data in your browser to remove locally stored progress. You can
-        sign out of your account through the app header when Auth0 is configured.
+        You can clear site data in your browser to remove locally stored progress.
       </p>
     </StaticDocLayout>
   )

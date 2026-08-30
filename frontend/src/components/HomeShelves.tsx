@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ShelfItem } from '../types/api'
+import { FeedbackState } from './FeedbackState'
 import { CatalogChipNav } from './catalog/CatalogChipNav'
 import { CatalogSectionTitle } from './catalog/CatalogSectionTitle'
 import { PosterRailCard } from './catalog/PosterRailCard'
@@ -10,9 +11,16 @@ type Props = {
   loading: boolean
   error: string | null
   onSelectItem: (item: ShelfItem) => void
+  onRetry?: () => void
 }
 
-export function HomeShelves({ shelves, loading, error, onSelectItem }: Props) {
+export function HomeShelves({
+  shelves,
+  loading,
+  error,
+  onSelectItem,
+  onRetry,
+}: Props) {
   const railRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const [activeShelfId, setActiveShelfId] = useState(() => shelves[0]?.id ?? '')
 
@@ -81,9 +89,11 @@ export function HomeShelves({ shelves, loading, error, onSelectItem }: Props) {
   if (!shelves.length && error) {
     return (
       <section className={styles.wrap}>
-        <p className={styles.error} role="alert">
-          {error}
-        </p>
+        <FeedbackState
+          title="Something went wrong"
+          message="We couldn’t load the catalog."
+          onRetry={onRetry}
+        />
       </section>
     )
   }

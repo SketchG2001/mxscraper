@@ -19,8 +19,7 @@ export function AboutPage() {
       <h2>Tech stack</h2>
       <p>
         The UI is built with React; catalog and stream APIs are provided by a backend you
-        run locally or deploy yourself. Authentication for playback is optional and typically
-        uses Auth0.
+        run locally or deploy yourself.
       </p>
     </StaticDocLayout>
   )

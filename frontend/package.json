@@ -8,10 +8,14 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start": "serve -s dist -l tcp://0.0.0.0:5173"
+    "start": "serve -s dist -l tcp://0.0.0.0:5173",
+    "cap:sync": "npm run build && npx cap sync android"
   },
   "dependencies": {
-    "@auth0/auth0-react": "^2.16.1",
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/app": "^8.0.1",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/screen-orientation": "^8.0.1",
     "@tanstack/react-query": "^5.96.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -20,6 +24,7 @@
     "video.js": "^8.23.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.0",
     "@eslint/js": "^9.39.4",
     "@types/node": "^24.12.0",
     "@types/react": "^19.2.14",

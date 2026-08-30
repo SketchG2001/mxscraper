@@ -23,11 +23,10 @@ export function HelpPage() {
         an episode. <Link to="/">Return home</Link> anytime to see shelves and continue
         watching.
       </p>
-      <h2>Sign-in and playback</h2>
+      <h2>Playback</h2>
       <p>
-        Playback is gated behind sign-in when the API is configured with Auth0. If
-        streams fail to load, confirm you are logged in, that environment variables are
-        set, and that your backend and stream proxy are running.
+        Open a title and press Play. If a stream fails to load, confirm the backend and
+        HLS proxy are running.
       </p>
       <h2>Resume progress</h2>
       <p>

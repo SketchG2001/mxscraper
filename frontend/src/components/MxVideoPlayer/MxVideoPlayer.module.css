@@ -15,6 +15,68 @@
   border-radius: 0;
   border: none;
   box-shadow: none;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: min(56.25vw, 100dvh);
+  background: #000;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.shellCinema:fullscreen,
+.shellCinema:-webkit-full-screen,
+.shellCinema[data-fullwindow='true'] {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  background: #000;
+  overflow: hidden;
+  border-radius: 0;
+}
+
+.shellCinema:fullscreen .videoHostCinema,
+.shellCinema:-webkit-full-screen .videoHostCinema,
+.shellCinema[data-fullwindow='true'] .videoHostCinema {
+  height: 100%;
+}
+
+.shellCinema:fullscreen :global(.video-js),
+.shellCinema:-webkit-full-screen :global(.video-js),
+.shellCinema[data-fullwindow='true'] :global(.video-js) {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding-top: 0 !important;
+}
+
+.shellCinema:fullscreen :global(.vjs-tech),
+.shellCinema:-webkit-full-screen :global(.vjs-tech),
+.shellCinema[data-fullwindow='true'] :global(.vjs-tech),
+.videoHostCinema :global(.vjs-tech) {
+  object-fit: contain;
+  background: #000;
+}
+
+/* Cinema React chrome owns UI — hide native Video.js chrome */
+.videoHostCinema :global(.vjs-mx-cinema .vjs-control-bar),
+.videoHostCinema :global(.vjs-mx-cinema .vjs-big-play-button),
+.videoHostCinema :global(.vjs-mx-cinema .vjs-loading-spinner),
+.videoHostCinema :global(.vjs-mx-cinema .vjs-error-display),
+.videoHostCinema :global(.vjs-mx-cinema .vjs-modal-dialog) {
+  display: none !important;
+}
+
+.videoHostCinema :global(.vjs-mx-cinema .vjs-text-track-cue > div) {
+  font-size: var(--mx-cc-size, 17px) !important;
+  background-color: rgba(0, 0, 0, var(--mx-cc-bg, 0.65)) !important;
 }
 
 .srOnly {
@@ -37,22 +99,27 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: var(--touch-min, 44px);
+  height: var(--touch-min, 44px);
+  padding: 0;
+  border: none;
   border-radius: 50%;
   color: #fff;
-  text-decoration: none;
   background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition:
-    background 0.2s ease,
-    transform 0.2s ease;
+  cursor: pointer;
 }
 
 .backOverlay:hover {
   background: rgba(0, 0, 0, 0.5);
-  transform: scale(1.04);
+}
+
+@media (max-width: 639.98px) {
+  .backOverlay {
+    top: 8px;
+    left: 6px;
+  }
 }
 
 .backIcon {
@@ -62,15 +129,24 @@
 }
 
 @media (max-width: 639.98px) {
-  .backOverlay {
-    top: 6px;
-    left: 4px;
-    width: 36px;
-    height: 36px;
+  :global(.video-js .vjs-playback-rate),
+  :global(.video-js .vjs-chapters-button),
+  :global(.video-js .vjs-descriptions-button),
+  :global(.video-js .vjs-picture-in-picture-control),
+  :global(.video-js .vjs-custom-control-spacer),
+  :global(.video-js .vjs-remaining-time),
+  :global(.video-js .vjs-seek-to-live-control),
+  :global(.video-js .vjs-live-control) {
+    display: none !important;
   }
 
-  .backIcon {
-    font-size: 1rem;
+  :global(.video-js .vjs-control-bar) {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  :global(.video-js .vjs-control) {
+    width: 2.6em;
   }
 }
 
@@ -92,6 +168,21 @@
   font-family: var(--font-sans);
   --mx-accent: #5b9cfa;
   --mx-accent-soft: rgba(91, 156, 250, 0.35);
+}
+
+.videoHostCinema {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.videoHostCinema :global(.video-js) {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  padding-top: 0 !important;
 }
 
 .videoHostCinema :global(.video-js.vjs-mx-cinema) {

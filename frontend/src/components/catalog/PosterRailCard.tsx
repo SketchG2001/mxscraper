@@ -54,6 +54,7 @@ export function PosterRailCard({ item, onOpen }: Props) {
   }, [])
 
   const scheduleShow = useCallback(() => {
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return
     clearTimers()
     showTimer.current = setTimeout(() => {
       const pos = computePosition()

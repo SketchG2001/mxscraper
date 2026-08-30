@@ -15,7 +15,7 @@ export type MxQualityPlayerOptions = {
 
 let registered = false
 
-function menuLabelForSource(src: MxQualitySource): string {
+export function menuLabelForSource(src: MxQualitySource): string {
   if (src.key === 'stream_default') {
     return `Auto (${src.label})`
   }
@@ -26,7 +26,7 @@ function menuLabelForSource(src: MxQualitySource): string {
   return isPremium ? `${src.label} · Gold` : src.label
 }
 
-function vhsSelectedLevelIndex(ql: QualityLevelListLike): number {
+export function vhsSelectedLevelIndex(ql: QualityLevelListLike): number {
   if (!ql || typeof ql.length !== 'number') return -1
   const enabled: number[] = []
   for (let i = 0; i < ql.length; i++) {
@@ -37,7 +37,7 @@ function vhsSelectedLevelIndex(ql: QualityLevelListLike): number {
   return -1
 }
 
-function sortVhsLevelIndices(ql: QualityLevelListLike): { idx: number; label: string }[] {
+export function sortVhsLevelIndices(ql: QualityLevelListLike): { idx: number; label: string }[] {
   const rows: { idx: number; h: number; bw: number }[] = []
   for (let i = 0; i < ql.length; i++) {
     const L = ql[i]
@@ -53,6 +53,28 @@ function sortVhsLevelIndices(ql: QualityLevelListLike): { idx: number; label: st
     else label = `Level ${r.idx + 1}`
     return { idx: r.idx, label }
   })
+}
+
+/** Enable Auto (all levels) or a single VHS quality ladder index. */
+export function applyVhsQualityLevel(ql: QualityLevelListLike, levelIndex: number): void {
+  if (!ql || typeof ql.length !== 'number') return
+  if (levelIndex < 0) {
+    for (let j = 0; j < ql.length; j++) {
+      try {
+        ql[j].enabled = true
+      } catch {
+        /* */
+      }
+    }
+    return
+  }
+  for (let j = 0; j < ql.length; j++) {
+    try {
+      ql[j].enabled = j === levelIndex
+    } catch {
+      /* */
+    }
+  }
 }
 
 /**

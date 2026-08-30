@@ -52,8 +52,10 @@ export function HomePage() {
           }
         >
           {bannersQuery.isPending && bannerItems.length === 0 ? (
-            <div className={styles.heroInner} aria-busy="true">
-              <p className={styles.heroLoading}>Loading featured titles…</p>
+            <div className={styles.heroInner} aria-busy="true" aria-label="Loading featured titles">
+              <div className={styles.heroSkelTitle} />
+              <div className={styles.heroSkelLine} />
+              <div className={styles.heroSkelLineShort} />
             </div>
           ) : showFallbackHero ? (
             <div className={styles.heroInner}>
@@ -61,8 +63,8 @@ export function HomePage() {
               <h1 className={styles.h1}>Find your next watch</h1>
               <p className={styles.lead}>
                 Use <strong>Search</strong> in the header to find titles or open an{' '}
-                <code>mxplayer.in</code> link — then browse the catalog below. Sign in to
-                play when your API is configured.
+                <code>mxplayer.in</code> link — then browse the catalog and play from a
+                title page.
               </p>
             </div>
           ) : null}
@@ -82,6 +84,7 @@ export function HomePage() {
                 : String(shelvesQuery.error)
               : (shelvesQuery.data?.error ?? null)
           }
+          onRetry={() => void shelvesQuery.refetch()}
           onSelectItem={(item) =>
             goItem({
               id: item.id,

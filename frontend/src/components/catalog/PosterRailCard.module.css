@@ -22,6 +22,17 @@
   transform: translateY(-4px);
 }
 
+@media (hover: none) {
+  .tile:hover {
+    transform: none;
+  }
+
+  .tile:hover .posterWrap {
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  }
+}
+
 .tile:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 4px;

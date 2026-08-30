@@ -465,18 +465,44 @@
   overflow: hidden;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 720px) {
+  .wrapWithBg {
+    min-height: min(48vh, 380px);
+  }
+
+  .content {
+    min-height: min(40vh, 320px);
+    padding-top: 12px;
+    padding-bottom: 8px;
+  }
+
+  .heroTitle {
+    font-size: 1.5rem;
+  }
+
+  .heroDesc {
+    -webkit-line-clamp: 2;
+    margin-bottom: 16px;
+  }
+
+  .btnPlay,
+  .btnSecondary {
+    min-height: var(--touch-min);
+  }
+
+  .btnMyList,
+  .railWrap,
   .bannerControls {
-    position: static;
-    transform: none;
-    width: 100%;
-    justify-content: flex-end;
-    margin-top: 10px;
+    display: none;
   }
 
   .heroBottom {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
+    flex-direction: row;
+    justify-content: center;
+  }
+
+  .dot {
+    min-width: 12px;
+    min-height: 12px;
   }
 }

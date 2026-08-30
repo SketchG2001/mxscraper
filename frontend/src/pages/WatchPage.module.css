@@ -1,38 +1,42 @@
 .page {
-  max-width: var(--layout-content-max, 1680px);
   width: 100%;
   margin: 0 auto;
 }
 
-/* Full-bleed player: escape the content max-width like MX / OTT watch UIs */
 .watchCinema {
-  width: 100vw;
+  width: 100%;
   position: relative;
-  left: 50%;
-  right: 50%;
-  margin-left: -50vw;
-  margin-right: -50vw;
+  background: #000;
+  /* Isolate player from below-fold content (download, meta, episodes). */
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+}
+
+.below {
+  padding: 12px var(--layout-pad, 16px) 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-page);
 }
 
 .chrome {
-  margin-bottom: clamp(16px, 3vw, 24px);
-  padding-bottom: clamp(14px, 2.5vw, 20px);
-  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-md);
+  padding: var(--space-md) var(--layout-pad, 16px) 0;
 }
 
 .back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  min-height: var(--touch-min);
+  padding: 0 4px;
+  border: none;
+  background: transparent;
   color: var(--accent);
-  text-decoration: none;
-  font-size: 0.88rem;
+  font: inherit;
+  font-size: 0.9rem;
   font-weight: 500;
-  margin-bottom: 12px;
-}
-
-.back:hover {
-  text-decoration: underline;
+  cursor: pointer;
+  margin-bottom: 8px;
 }
 
 .titleBlock {
@@ -102,10 +106,23 @@
 .loadingRow {
   display: flex;
   align-items: center;
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  padding: 12px 0;
+  padding: 16px var(--layout-pad, 16px);
   margin-bottom: 8px;
+}
+
+.skelBar {
+  display: block;
+  width: min(220px, 70%);
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--bg-card) 0%,
+    var(--bg-elevated) 45%,
+    var(--bg-card) 90%
+  );
+  background-size: 200% 100%;
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .loadingPulse {

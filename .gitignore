@@ -523,6 +523,18 @@ celerybeat.pid
 # SageMath parsed files
 *.sage.py
 
+# App-private download output (web/dev)
+**/.downloads/
+
+# Android FFmpeg is built from official source — never commit prebuilt .so
+frontend/android/app/src/main/jniLibs/**/*.so
+
+# Local FFmpeg source/build scratch (scripts/build-ffmpeg-android.sh)
+.ffmpeg-build/
+
+# Shareable APKs from scripts/build-apk.sh (local only)
+/release/
+
 # Environments
 .env
 .venv

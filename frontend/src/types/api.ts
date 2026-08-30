@@ -67,7 +67,28 @@ export type StreamResponse = {
   drm: boolean
 }
 
-export type HealthResponse = { status: string; proxy_port: number }
+export type HealthResponse = {
+  status: string
+  proxy_port: number
+  ffmpeg?: string
+}
+
+export type DownloadJob = {
+  job_id: string
+  content_id: string
+  title: string
+  status: 'queued' | 'downloading' | 'completed' | 'failed' | 'cancelled' | string
+  progress: number
+  bytes_downloaded?: number | null
+  total_bytes?: number | null
+  speed?: number | null
+  eta?: number | null
+  filename?: string | null
+  file_available: boolean
+  error?: string | null
+  created_at: number
+  completed_at?: number | null
+}
 
 export type ExtractBrowserResponse = {
   type: string

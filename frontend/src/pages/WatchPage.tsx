@@ -1,12 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { DownloadPanel } from '../components/DownloadPanel'
+import { FeedbackState } from '../components/FeedbackState'
 import { MxVideoPlayer } from '../components/MxVideoPlayer/MxVideoPlayer'
 import {
   WatchBelowFold,
   formatDurationSeconds,
 } from '../components/WatchBelowFold/WatchBelowFold'
-import { useAppAuth } from '../hooks/useAppAuth'
 import { usePageMeta } from '../hooks/usePageMeta'
 import {
   ApiError,
@@ -15,6 +16,7 @@ import {
   fetchHealth,
   fetchStream,
 } from '../lib/api'
+import { navigateBack } from '../lib/navBack'
 import { getProxyHost } from '../lib/proxyHost'
 import { proxiedStreamUrl } from '../lib/proxyUrl'
 import {
@@ -34,14 +36,6 @@ type LocationState = {
   seriesContentId?: string
   seriesTitle?: string
   seriesType?: string
-}
-
-/** Thrown when Auth0 session exists but no API access token (see AuthGate getAccessToken). */
-export class MissingApiAccessTokenError extends Error {
-  constructor() {
-    super('MISSING_API_ACCESS_TOKEN')
-    this.name = 'MissingApiAccessTokenError'
-  }
 }
 
 export function WatchPage() {
@@ -70,10 +64,9 @@ export function WatchPage() {
 
   usePageMeta(
     title === 'Watch' ? 'Watch' : `Watch ${title}`,
-    `Playback: ${title}. Sign in to stream via MX Scraper.`,
+    `Playback: ${title}.`,
   )
 
-  const auth = useAppAuth()
   const healthQuery = useQuery({
     queryKey: ['health'],
     queryFn: fetchHealth,
@@ -129,16 +122,8 @@ export function WatchPage() {
 
   const streamQuery = useQuery({
     queryKey: streamQueryKey,
-    queryFn: async () => {
-      const token = await auth.getAccessToken()
-      if (!token) throw new MissingApiAccessTokenError()
-      return fetchStream(contentId!, type, token, seasonId, refTitleForApi)
-    },
-    enabled:
-      Boolean(contentId) &&
-      !directUrl &&
-      auth.isAuthenticated &&
-      auth.authConfigured,
+    queryFn: () => fetchStream(contentId!, type, seasonId, refTitleForApi),
+    enabled: Boolean(contentId) && !directUrl,
   })
 
   const rawStreamUrl = directUrl ?? streamQuery.data?.stream_url ?? ''
@@ -224,7 +209,7 @@ export function WatchPage() {
         pathname: `/watch/${encodeURIComponent(ep.id)}`,
         search: `?${episodeNav.qs(ep)}`,
       },
-      { state: episodeNavState(ep) },
+      { replace: true, state: episodeNavState(ep) },
     )
   }, [episodeNav, episodeNavState, navigate])
 
@@ -236,7 +221,7 @@ export function WatchPage() {
         pathname: `/watch/${encodeURIComponent(ep.id)}`,
         search: `?${episodeNav.qs(ep)}`,
       },
-      { state: episodeNavState(ep) },
+      { replace: true, state: episodeNavState(ep) },
     )
   }, [episodeNav, episodeNavState, navigate])
 
@@ -303,77 +288,45 @@ export function WatchPage() {
     }
   }, [state?.seriesContentId, state?.seriesTitle, state?.seriesType])
 
-  const needsAuthEnv =
-    !directUrl && !auth.authConfigured && Boolean(contentId)
-  const needsLogin =
-    !directUrl && auth.authConfigured && !auth.isAuthenticated
   const waitingApi =
-    !directUrl &&
-    auth.isAuthenticated &&
-    streamQuery.isLoading &&
-    Boolean(contentId)
+    !directUrl && streamQuery.isLoading && Boolean(contentId)
   const apiError =
     !directUrl && streamQuery.isError ? String(streamQuery.error) : null
-  const missingApiToken =
-    !directUrl &&
-    streamQuery.isError &&
-    (streamQuery.error instanceof MissingApiAccessTokenError ||
-      (streamQuery.error instanceof Error &&
-        streamQuery.error.message === 'MISSING_API_ACCESS_TOKEN'))
+
+  const onPlayerBack = useCallback(() => {
+    navigateBack(navigate)
+  }, [navigate])
 
   return (
     <div className={styles.page}>
       {!playbackUrl ? (
         <div className={styles.chrome}>
-          <Link to="/" className={styles.back}>
-            ← Home
-          </Link>
+          <button
+            type="button"
+            className={styles.back}
+            onClick={onPlayerBack}
+            aria-label="Back"
+          >
+            ← Back
+          </button>
           <div className={styles.titleBlock}>
             <h1 className={styles.title}>{title}</h1>
           </div>
         </div>
       ) : null}
 
-      {needsAuthEnv && (
-        <p className={`${styles.notice} ${styles.noticeWarn}`}>
-          Add <code>VITE_AUTH0_*</code> to <code>.env.local</code> so the API can
-          verify your session.
-        </p>
-      )}
-
-      {needsLogin && (
-        <p className={`${styles.notice} ${styles.noticeWarn}`}>
-          Log in to load a stream from the API.
-          <button type="button" className={styles.loginBtn} onClick={auth.login}>
-            Log in
-          </button>
-        </p>
-      )}
-
       {waitingApi && (
         <div className={styles.loadingRow} role="status" aria-live="polite">
           <span className={styles.loadingPulse} aria-hidden />
-          Preparing stream…
+          <span className={styles.skelBar} />
         </div>
       )}
-      {missingApiToken && (
-        <p className={`${styles.notice} ${styles.noticeError}`}>
-          You are signed in, but the app could not get an <strong>API access token</strong>{' '}
-          for playback. In Auth0: <strong>Applications →</strong> your SPA <strong>→ APIs</strong> →{' '}
-          authorize <strong>User</strong> access for your API (same Identifier as{' '}
-          <code>VITE_AUTH0_AUDIENCE</code>
-          {import.meta.env.VITE_AUTH0_AUDIENCE
-            ? `: ${import.meta.env.VITE_AUTH0_AUDIENCE}`
-            : ''}
-          ).
-          Then set <code>VITE_AUTH0_AUDIENCE_ON_LOGIN=true</code> in <code>.env</code>, restart
-          Vite, and <strong>log out and log in</strong>. If it still fails, enable{' '}
-          <strong>Refresh Token Rotation</strong> on the SPA and add{' '}
-          <code>VITE_AUTH0_USE_REFRESH_TOKENS=true</code>.
-        </p>
-      )}
-      {apiError && !missingApiToken && (
-        <p className={`${styles.notice} ${styles.noticeError}`}>{apiError}</p>
+      {apiError && (
+        <FeedbackState
+          title="Something went wrong"
+          message="We couldn't start playback."
+          onRetry={() => void streamQuery.refetch()}
+        />
       )}
 
       {playbackUrl ? (
@@ -385,15 +338,28 @@ export function WatchPage() {
               watchKey={watchKey}
               title={title}
               coverImage={coverImage}
-            qualitySources={
-              qualitySources.length >= 1 ? qualitySources : undefined
-            }
+              qualitySources={
+                qualitySources.length >= 1 ? qualitySources : undefined
+              }
               variant="cinema"
-              backTo="/"
+              onBack={onPlayerBack}
               onPrevEpisode={episodeNav?.prevEp ? goPrevEpisode : undefined}
               onNextEpisode={episodeNav?.nextEp ? goNextEpisode : undefined}
             />
           </div>
+          {contentId && !directUrl ? (
+            <div className={styles.below}>
+              <DownloadPanel
+                contentId={contentId}
+                contentType={type}
+                seasonId={seasonId}
+                title={title}
+                refTitle={refTitleForApi}
+                stream={streamQuery.data}
+                ffmpeg={healthQuery.data?.ffmpeg}
+              />
+            </div>
+          ) : null}
           {contentId ? (
             <WatchBelowFold
               displayTitle={displayTitle}
@@ -417,12 +383,15 @@ export function WatchPage() {
             />
           ) : null}
         </>
-      ) : !needsLogin && !needsAuthEnv && !waitingApi ? (
-        <p className={`${styles.notice} ${styles.noticeMuted}`}>
-          {!directUrl && !contentId
-            ? 'No stream URL. Go back and open content from search.'
-            : 'Waiting for stream URL…'}
-        </p>
+      ) : !waitingApi && !apiError ? (
+        <FeedbackState
+          title={!directUrl && !contentId ? 'No stream' : 'Unavailable'}
+          message={
+            !directUrl && !contentId
+              ? 'Open a title from search or the catalog.'
+              : 'This title doesn’t have a playable stream.'
+          }
+        />
       ) : null}
 
       {!directUrl && streamQuery.data?.drm && (

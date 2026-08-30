@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">MX Scraper</string>
+    <string name="title_activity_main">MX Scraper</string>
+    <string name="package_name">com.mxscraper.app</string>
+    <string name="custom_url_scheme">com.mxscraper.app</string>
+</resources>
