@@ -51,6 +51,6 @@ Date: 2026-08-30. **No git commit.**
 | `scripts/build-apk.sh` | **ADDED** |
 | `docs/build-apk.md` | **ADDED** |
 | `docs/phase-apk-build-result.md` | **ADDED** |
-| `.gitignore` | **MODIFIED** (`/release/`) |
+| `.gitignore` | **MODIFIED** (allowlist `/release/` despite VS `[Rr]elease/`) |
 
 No application / Android / backend source changes.

@@ -21,6 +21,9 @@ mono_crash.*
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
+# Shareable APK output at repo root (not VS Release/)
+!/release/
+!/release/**
 [Rr]eleases/
 x64/
 x86/
@@ -532,8 +535,7 @@ frontend/android/app/src/main/jniLibs/**/*.so
 # Local FFmpeg source/build scratch (scripts/build-ffmpeg-android.sh)
 .ffmpeg-build/
 
-# Shareable APKs from scripts/build-apk.sh (local only)
-/release/
+
 
 # Environments
 .env

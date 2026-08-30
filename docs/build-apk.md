@@ -67,7 +67,7 @@ copy                   → release/MX-Scraper.apk
 | Build type | debug-signed (sideload; not Play Store) |
 | Checksum | SHA-256 printed on success |
 
-The `release/` directory is gitignored.
+The `release/` directory is tracked in git (shareable APK).
 
 ## Optional install
 
